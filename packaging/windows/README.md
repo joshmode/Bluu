@@ -18,6 +18,10 @@ The script:
 3. writes SHA-256 hashes to `BUILD-INFO.txt`;
 4. creates a ZIP under `dist/`.
 
+`bluu-provider-demo.exe` is included only as a protocol fixture; it does not
+provide a Bluetooth transport. Real advanced codecs require a separately installed
+provider/driver that owns the encoder and A2DP transport.
+
 ## Signing
 
 Production release artifacts should be Authenticode-signed. A self-signed local

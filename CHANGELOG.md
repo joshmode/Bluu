@@ -14,6 +14,10 @@ First engineering foundation:
 - Demo mode for non-Windows UI development.
 - CI, unit tests, cross-target type-check, build documentation, and a portable release
   script.
+- Advanced codec provider API, discovery, explicit local installation, ordered
+  per-device preferences, parameters, apply/verify/rollback, and a simulated
+  end-to-end provider fixture.
 
-Known limitations: no hardware validation on Windows yet; no codec preference API; no
-LDAC/aptX HD enabling; ARM64 packaging not yet verified.
+Known limitations: no real-provider/hardware validation on Windows yet; the Windows
+in-box stack still has no codec preference API; advanced codecs require a compatible,
+licensed provider/driver and capable hardware; ARM64 packaging is not yet verified.

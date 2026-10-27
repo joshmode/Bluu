@@ -18,12 +18,16 @@ try {
     $targetDir = Join-Path $root "target\x86_64-pc-windows-msvc\$Profile"
     $exe = Join-Path $targetDir "bluu.exe"
     $helper = Join-Path $targetDir "bluu-etw-helper.exe"
+    $providerDemo = Join-Path $targetDir "bluu-provider-demo.exe"
     if (-not (Test-Path $exe)) { throw "bluu.exe was not produced" }
     if (-not (Test-Path $helper)) { throw "bluu-etw-helper.exe was not produced" }
 
     New-Item -ItemType Directory -Force -Path $Output | Out-Null
     Copy-Item $exe $Output -Force
     Copy-Item $helper $Output -Force
+    if (Test-Path $providerDemo) {
+        Copy-Item $providerDemo $Output -Force
+    }
     Copy-Item (Join-Path $root "README.md") $Output -Force
     Copy-Item (Join-Path $root "LICENSE-MIT") $Output -Force
     Copy-Item (Join-Path $root "LICENSE-APACHE") $Output -Force
@@ -32,6 +36,9 @@ try {
 
     $sha = Get-FileHash (Join-Path $Output "bluu.exe") -Algorithm SHA256
     $helperSha = Get-FileHash (Join-Path $Output "bluu-etw-helper.exe") -Algorithm SHA256
+    $providerSha = if (Test-Path (Join-Path $Output "bluu-provider-demo.exe")) {
+        (Get-FileHash (Join-Path $Output "bluu-provider-demo.exe") -Algorithm SHA256).Hash
+    } else { "not included" }
     @"
 Bluu portable Windows build
 Version: see Cargo.toml
@@ -40,6 +47,7 @@ Architecture: x86_64-pc-windows-msvc
 
 bluu.exe SHA-256: $($sha.Hash)
 bluu-etw-helper.exe SHA-256: $($helperSha.Hash)
+bluu-provider-demo.exe SHA-256: $providerSha
 
 Run bluu.exe as a standard user. The helper is used only when the user chooses
 "Verify live codec" and approves the one-time elevation prompt.

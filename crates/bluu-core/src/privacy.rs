@@ -116,6 +116,23 @@ impl DiagnosticExport {
                     .or_else(|| active.device_id.as_ref().map(|_| "device-unknown".into()));
             }
         }
+        for provider in &mut snapshot.providers {
+            provider.manifest_path = "<provider manifest path>".into();
+            provider.directory = "<provider directory>".into();
+            provider.manifest.homepage = String::new();
+            if options.redact_device_names {
+                provider.manifest.publisher = if provider.manifest.publisher.is_empty() {
+                    String::new()
+                } else {
+                    "<provider publisher>".into()
+                };
+            }
+        }
+        if options.redact_addresses {
+            for preference in &mut snapshot.provider_preferences {
+                preference.device_id = "<redacted device>".into();
+            }
+        }
         if options.redact_paths {
             snapshot.warnings = snapshot.warnings.iter().map(|s| redact_text(s)).collect();
             snapshot.notes = snapshot.notes.iter().map(|s| redact_text(s)).collect();

@@ -5,6 +5,7 @@ echo "== format =="
 cargo fmt --all -- --check
 
 echo "== host tests =="
+cargo build -p bluu-provider-demo
 cargo test --workspace
 
 echo "== host clippy =="

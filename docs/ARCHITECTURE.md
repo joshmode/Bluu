@@ -118,8 +118,9 @@ silently converted into “unsupported hardware.”
 - Helper input is a small parsed argument set; no shell interpolation of arbitrary
   commands. The path is passed as a quoted parameter to ShellExecuteExW.
 - Temp result path is app-generated under the user's temp directory.
-- No driver, service, registry write, Secure Boot change, signature-enforcement
-  change, or system-file replacement.
+- The UI itself does not install a driver/service or write the registry. Advanced
+  providers are separate packages; any driver/service install is performed by the
+  provider publisher with explicit user consent.
 - No telemetry or network code.
 - Diagnostics are local JSON, redacted by default.
 

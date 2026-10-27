@@ -108,11 +108,11 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
         },
         FeasibilityRow {
             codec: CodecId::AptXHd,
-            status: FeasibilityStatus::RequiresSubstantialSystemIntegration,
+            status: FeasibilityStatus::ConditionallyImplementable,
             confidence: Confidence::High,
             windows_native: "Not in Microsoft's in-box A2DP codec table for Windows 10 or 11.".into(),
             oem_driver_dependent: "Only if an OEM/vendor supplies a complete Bluetooth A2DP path; not a generic toggle.".into(),
-            config_only: "No. Registry toggles are not a supported codec registration mechanism.".into(),
+            config_only: "No. Use a validated advanced codec provider that owns the A2DP driver/transport; registry toggles are not a codec-registration mechanism.".into(),
             needs_codec_implementation: "Yes, plus a transport stack able to negotiate and send it.".into(),
             needs_stack_or_driver: "Yes: replacement A2DP driver/stack or vendor integration.".into(),
             remote_must_advertise: "Yes.".into(),
@@ -122,7 +122,7 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
             evidence: Evidence::Documented,
             limitations: vec![
                 "A decoder or encoder library does not make Windows transmit aptX HD.".into(),
-                "Replacing the A2DP stack raises kernel/driver, Secure Boot, support, and recovery risks.".into(),
+                "A provider/replacement A2DP stack is required and raises kernel/driver, Secure Boot, support, and recovery risks.".into(),
             ],
         },
         FeasibilityRow {
@@ -131,7 +131,7 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
             confidence: Confidence::High,
             windows_native: "Windows 11 24H2+ only on select devices with compatible Qualcomm Bluetooth radios (Microsoft documentation).".into(),
             oem_driver_dependent: "Yes; strongly hardware and OEM integration dependent.".into(),
-            config_only: "No generic public configuration path; vendor hardware/driver may choose automatically.".into(),
+            config_only: "No generic in-box path. An OEM/vendor provider may expose a preference; otherwise the vendor radio chooses automatically.".into(),
             needs_codec_implementation: "For non-qualified hardware, a complete licensed implementation and stack would be needed.".into(),
             needs_stack_or_driver: "Yes for generic PCs; no for qualifying OEM stacks.".into(),
             remote_must_advertise: "Yes, and the local radio must support the licensed path.".into(),
@@ -146,7 +146,7 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
         },
         FeasibilityRow {
             codec: CodecId::AptXLossless,
-            status: FeasibilityStatus::NotFeasibleSafeSupported,
+            status: FeasibilityStatus::ConditionallyImplementable,
             confidence: Confidence::Medium,
             windows_native: "Microsoft labels the 24H2 entry 'aptX Adaptive (lossless)' for select Qualcomm radios. It is not a general Windows feature.".into(),
             oem_driver_dependent: "Yes, to an extreme degree.".into(),
@@ -165,7 +165,7 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
         },
         FeasibilityRow {
             codec: CodecId::AptXLowLatency,
-            status: FeasibilityStatus::NotFeasibleSafeSupported,
+            status: FeasibilityStatus::ConditionallyImplementable,
             confidence: Confidence::Medium,
             windows_native: "Not in Microsoft's documented in-box A2DP codec table. Some third-party stacks recognise the vendor tuple.".into(),
             oem_driver_dependent: "Yes; only a vendor stack can provide a usable path.".into(),
@@ -184,11 +184,11 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
         },
         FeasibilityRow {
             codec: CodecId::Ldac,
-            status: FeasibilityStatus::RequiresSubstantialSystemIntegration,
+            status: FeasibilityStatus::ConditionallyImplementable,
             confidence: Confidence::High,
             windows_native: "Not in Microsoft's in-box Windows 10/11 A2DP codec table.".into(),
             oem_driver_dependent: "Could be supplied by a vendor dongle or replacement stack, but not exposed as a Windows preference.".into(),
-            config_only: "No; no supported registry codec-enable key.".into(),
+            config_only: "No in-box path. A provider may expose LDAC ordering/parameters when it supplies the encoder and A2DP transport.".into(),
             needs_codec_implementation: "Yes, plus A2DP negotiation and transmission integration.".into(),
             needs_stack_or_driver: "Yes, unless using an external dongle that presents its own audio device.".into(),
             remote_must_advertise: "Yes.".into(),
@@ -198,12 +198,12 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
             evidence: Evidence::Documented,
             limitations: vec![
                 "Do not bundle an LDAC binary without verified rights.".into(),
-                "A software encoder does not create Windows A2DP support.".into(),
+                "A software encoder does not create Windows A2DP support; use an installed provider that owns the driver/transport and licensing.".into(),
             ],
         },
         FeasibilityRow {
             codec: CodecId::Lc3,
-            status: FeasibilityStatus::RequiresSubstantialSystemIntegration,
+            status: FeasibilityStatus::ConditionallyImplementable,
             confidence: Confidence::High,
             windows_native: "Windows 11 22H2+ LE Audio uses vendor-specific ACX/VSAP paths; LC3 may be hosted by the controller, audio DSP, or IHV driver.".into(),
             oem_driver_dependent: "Yes. Windows documents an IHV audio driver stack and vendor-specific data path.".into(),
@@ -342,9 +342,6 @@ mod tests {
     fn ldac_is_not_promised_as_native() {
         let rows = feasibility_matrix();
         let ldac = rows.iter().find(|r| r.codec == CodecId::Ldac).unwrap();
-        assert_eq!(
-            ldac.status,
-            FeasibilityStatus::RequiresSubstantialSystemIntegration
-        );
+        assert_eq!(ldac.status, FeasibilityStatus::ConditionallyImplementable);
     }
 }

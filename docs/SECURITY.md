@@ -17,7 +17,9 @@ The main application is a standard-user process. It has no requestedExecutionLev
 `requireAdministrator` manifest. Discovering devices and reading endpoints/formats
 does not require elevation in the normal desktop case.
 
-The only privileged component is `bluu-etw-helper.exe`:
+The only privileged component shipped by Bluu is `bluu-etw-helper.exe`. An
+advanced provider can be marked `requires_elevation`; it is a separate publisher
+package and is launched only after explicit consent:
 
 | Item | Design |
 |---|---|
@@ -29,6 +31,10 @@ The only privileged component is `bluu-etw-helper.exe`:
 | Writes | Result file only |
 | Registry/driver/service | None |
 | Network | None |
+
+Bluu does not sign, bundle, install, or silently start a real provider driver or
+service. Installing the provider's signed driver/service is the publisher's
+installer's responsibility.
 
 ## Threat model
 

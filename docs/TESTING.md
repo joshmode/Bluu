@@ -16,9 +16,13 @@ cargo run -p bluu-platform --bin screenshots
 
 Results:
 
-- Core tests: 21 passed (codec IDs, evidence rules, SDP bounds/fixtures, feasibility,
-  privacy redaction, settings validation, verifier transitions).
-- Platform tests: 2 passed (screenshot invariants, helper argument/path validation).
+- Core tests: 27 passed (codec IDs, provider contracts, evidence rules, SDP
+  bounds/fixtures, feasibility, privacy redaction, settings, verification).
+- Platform tests: 5 passed (screenshot invariants, helper argument/path validation,
+  provider discovery/traversal rejection).
+- Provider integration tests: 4 passed (apply/verify/rollback round-trip,
+  missing-executable rejection, malformed-executable failure, contained
+  install/uninstall).
 - Platform screenshot test: passed.
 - Windows target: type-checked successfully (not linked or executed; MSVC runtime and
   Windows host are required for a real build).

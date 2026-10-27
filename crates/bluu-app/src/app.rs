@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use bluu_core::{
     codec::{CodecId, CodecReport},
     diagnostics::{self, DiagnosticFinding},
-    model::{CaptureRequest, Snapshot},
+    model::{CaptureRequest, ProviderOperationRequest, Snapshot},
     privacy::DiagnosticExport,
+    provider::{ProviderAction, ProviderPreference},
     settings::{Settings, ThemePreference},
     AudioBackend,
 };
@@ -34,6 +35,12 @@ pub struct BluuApp {
     pub show_privacy: bool,
     pub last_saved: Option<String>,
     pub first_scan_sent: bool,
+    pub selected_provider: Option<String>,
+    pub provider_order: Vec<CodecId>,
+    pub provider_parameters: std::collections::BTreeMap<String, String>,
+    pub provider_note: Option<(bool, String)>,
+    pub provider_busy: bool,
+    pub provider_consented: bool,
 }
 
 impl BluuApp {
@@ -64,7 +71,219 @@ impl BluuApp {
             show_privacy: false,
             last_saved: None,
             first_scan_sent: false,
+            selected_provider: None,
+            provider_order: Vec::new(),
+            provider_parameters: Default::default(),
+            provider_note: None,
+            provider_busy: false,
+            provider_consented: false,
         }
+    }
+
+    pub fn selected_provider_record(&self) -> Option<&bluu_core::ProviderRecord> {
+        let id = self.selected_provider.as_deref()?;
+        self.snapshot
+            .as_ref()?
+            .providers
+            .iter()
+            .find(|p| p.manifest.id == id)
+    }
+
+    pub fn select_provider(&mut self, id: String) {
+        self.selected_provider = Some(id);
+        self.provider_consented = false;
+        let Some(record) = self.selected_provider_record().cloned() else {
+            return;
+        };
+        let current = self.current_device().and_then(|device| {
+            self.snapshot
+                .as_ref()?
+                .provider_preferences
+                .iter()
+                .find(|pref| pref.provider_id == record.manifest.id && pref.device_id == device.id)
+        });
+        if let Some(pref) = current {
+            self.provider_order = pref.ordered_codecs.clone();
+            self.provider_parameters = pref.parameters.clone();
+        } else {
+            self.provider_order = record.manifest.codecs.iter().map(|c| c.codec).collect();
+            self.provider_parameters =
+                crate::provider_defaults::defaults_for_order(&record, &self.provider_order);
+        }
+    }
+
+    pub fn ensure_provider_selection(&mut self) {
+        if self.selected_provider_record().is_some() {
+            return;
+        }
+        let first = self.snapshot.as_ref().and_then(|s| {
+            s.providers
+                .iter()
+                .find(|p| p.is_usable())
+                .or_else(|| s.providers.first())
+                .map(|p| p.manifest.id.clone())
+        });
+        if let Some(id) = first {
+            self.select_provider(id);
+        }
+    }
+
+    pub fn find_provider_package(&mut self) {
+        #[cfg(windows)]
+        {
+            let path = rfd::FileDialog::new()
+                .set_title("Choose a Bluu provider package folder")
+                .pick_folder();
+            if let Some(path) = path {
+                self.install_provider_from(&path);
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            self.provider_note = Some((
+                false,
+                "Provider installation is available in the Windows build. Use BLUU_PROVIDER_DIR for host development."
+                    .into(),
+            ));
+        }
+    }
+
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub fn install_provider_from(&mut self, path: &std::path::Path) {
+        self.provider_note = Some((false, "Scanning and validating provider package…".into()));
+        match bluu_platform::providers::install_local_provider(path) {
+            Ok(record) => {
+                self.provider_note = Some((
+                    true,
+                    format!(
+                        "Copied {} {} into Bluu's provider directory (SHA-256 {}). Any vendor driver/service must still be installed by its publisher.",
+                        record.manifest.name,
+                        record.manifest.version,
+                        record.executable_sha256.as_deref().unwrap_or("unavailable")
+                    ),
+                ));
+                // Avoid rescanning the radio while the user is installing a provider:
+                // update the provider list in the existing snapshot immediately.
+                if let Some(snapshot) = &mut self.snapshot {
+                    snapshot
+                        .providers
+                        .retain(|p| p.manifest.id != record.manifest.id);
+                    snapshot.providers.push(record.clone());
+                    snapshot
+                        .providers
+                        .sort_by(|a, b| a.manifest.name.cmp(&b.manifest.name));
+                }
+                self.select_provider(record.manifest.id.clone());
+            }
+            Err(e) => {
+                self.provider_note = Some((false, format!("{e}\n{}", e.actionable())));
+            }
+        }
+    }
+
+    pub fn remove_selected_provider(&mut self) {
+        let Some(id) = self.selected_provider.clone() else {
+            return;
+        };
+        match bluu_platform::providers::uninstall_provider(&id) {
+            Ok(()) => {
+                self.provider_note = Some((true, "Provider package removed.".into()));
+                self.selected_provider = None;
+                if let Some(snapshot) = &mut self.snapshot {
+                    snapshot.providers.retain(|p| p.manifest.id != id);
+                }
+                self.ensure_provider_selection();
+            }
+            Err(e) => {
+                self.provider_note = Some((false, format!("{e}\n{}", e.actionable())));
+            }
+        }
+    }
+
+    pub fn refresh_provider_selection(&mut self) {
+        let id = self.selected_provider.clone();
+        if let Some(id) = id {
+            self.select_provider(id);
+        } else {
+            self.ensure_provider_selection();
+        }
+    }
+
+    pub fn provider_preference(&self) -> Option<ProviderPreference> {
+        let record = self.selected_provider_record()?;
+        let device = self.current_device()?;
+        Some(ProviderPreference {
+            provider_id: record.manifest.id.clone(),
+            device_id: device.id.clone(),
+            ordered_codecs: self.provider_order.clone(),
+            parameters: self.provider_parameters.clone(),
+            dry_run: false,
+        })
+    }
+
+    pub fn provider_operation(&mut self, operation: ProviderAction) {
+        if self.provider_busy {
+            return;
+        }
+        let Some(record) = self.selected_provider_record().cloned() else {
+            self.provider_note = Some((false, "Select an installed provider first.".into()));
+            return;
+        };
+        if !record.is_usable() {
+            self.provider_note = Some((
+                false,
+                format!("This provider is not usable: {}", record.issues.join("; ")),
+            ));
+            return;
+        }
+        if !record.simulated && !self.provider_consented {
+            self.provider_note = Some((
+                false,
+                "Review and acknowledge the provider's system-change/elevation warning before operating it."
+                    .into(),
+            ));
+            return;
+        }
+        if self
+            .current_device()
+            .is_some_and(|device| !device.connected)
+            && matches!(operation, ProviderAction::Apply)
+        {
+            self.provider_note = Some((
+                false,
+                "Connect the selected headphones before applying a codec preference.".into(),
+            ));
+            return;
+        }
+        if matches!(operation, ProviderAction::Apply | ProviderAction::Verify)
+            && self.provider_order.is_empty()
+        {
+            self.provider_note = Some((false, "Choose at least one codec.".into()));
+            return;
+        }
+        self.provider_busy = true;
+        let preference = self.provider_preference();
+        let device_id = self.current_device().map(|d| d.id.clone());
+        let provider_id = record.manifest.id.clone();
+        self.provider_note = Some((
+            false,
+            format!(
+                "{} via {}…",
+                crate::provider_defaults::operation_label(operation),
+                record.manifest.name
+            ),
+        ));
+        self.worker.provider_operation(ProviderOperationRequest {
+            provider_id,
+            operation,
+            device_id,
+            preference,
+            rollback_token: None,
+        });
+    }
+
+    pub fn provider_rollback(&mut self) {
+        self.provider_operation(ProviderAction::Rollback);
     }
 
     pub fn current_device(&self) -> Option<&bluu_core::BluetoothAudioDevice> {
@@ -210,6 +429,7 @@ impl BluuApp {
                             }
                         }
                         self.snapshot = Some(snapshot);
+                        self.ensure_provider_selection();
                     }
                     Err(e) => {
                         self.worker.scan_finished();
@@ -241,6 +461,46 @@ impl BluuApp {
                 WorkerEvent::Captured(Err(e)) => {
                     self.capturing = false;
                     self.capture_note = Some((false, format!("{e}\n{}", e.actionable())));
+                }
+                WorkerEvent::ProviderOperated(boxed) => {
+                    self.provider_busy = false;
+                    match *boxed {
+                        Ok(outcome) => {
+                            self.provider_note = Some((
+                                outcome.accepted,
+                                format!(
+                                    "{}{}{}",
+                                    outcome.message,
+                                    if outcome.requires_reconnect {
+                                        " Reconnect the headphones to activate the preference."
+                                    } else {
+                                        ""
+                                    },
+                                    if outcome.observation.is_some() {
+                                        " The provider reported an active codec; see Codecs for its evidence level."
+                                    } else {
+                                        ""
+                                    }
+                                ),
+                            ));
+                            if let Some(snapshot) = &mut self.snapshot {
+                                if let Some(pref) = outcome.applied_preference {
+                                    snapshot.provider_preferences.retain(|p| {
+                                        !(p.provider_id == outcome.provider_id
+                                            && p.device_id == pref.device_id)
+                                    });
+                                    snapshot.provider_preferences.push(pref);
+                                }
+                                if let Some(observation) = outcome.observation {
+                                    self.selected_codec = Some(observation.codec);
+                                    snapshot.active_codec = Some(observation);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.provider_note = Some((false, format!("{e}\n{}", e.actionable())));
+                        }
+                    }
                 }
             }
         }
@@ -433,6 +693,7 @@ impl eframe::App for BluuApp {
                         .response;
                     if response.interact(egui::Sense::click()).clicked() {
                         self.selected_device = Some(device.id.clone());
+                        self.refresh_provider_selection();
                         self.save_settings();
                     }
                 }
@@ -510,6 +771,7 @@ impl eframe::App for BluuApp {
                             NavSection::Home => ui::home(self, ui),
                             NavSection::Devices => ui::devices(self, ui),
                             NavSection::Codecs => ui::codecs(self, ui),
+                            NavSection::Providers => ui::providers(self, ctx, ui),
                             NavSection::Diagnostics => ui::diagnostics(self, ui),
                             NavSection::Settings => ui::settings(self, ctx, ui),
                         }
@@ -572,7 +834,7 @@ impl BluuApp {
                         .color(theme::warn()),
                 );
                 ui.label(
-                    "It does not install drivers, edit the registry, disable Secure Boot or driver signature enforcement, replace the Bluetooth stack, or register codecs. Windows exposes no supported API to choose an A2DP codec, so Bluu does not offer a fake preference switch.",
+                    "It does not silently install drivers, edit the registry, disable Secure Boot or driver signature enforcement, or replace the Bluetooth stack. Advanced codecs require a separately installed provider that owns the encoder, transport, driver signing, and licensing. Bluu validates and controls that provider; it does not bundle proprietary codecs.",
                 );
                 ui.add_space(8.0);
                 ui.label(

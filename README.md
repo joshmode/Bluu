@@ -22,8 +22,9 @@ without pretending Windows offers controls it does not.
 
 ## What it deliberately does not do
 
-- It does **not** install drivers, edit the registry, disable Secure Boot, or replace
-  the Bluetooth stack.
+- It does **not** silently install drivers, edit the registry, disable Secure Boot,
+  or replace the Bluetooth stack. Advanced providers are explicitly installed and
+  may control a vendor/replacement driver under their publisher’s signed package.
 - It does **not** claim that a codec library adds Windows A2DP support.
 - It does **not** show a codec as active because it is selected in the UI.
 - It does **not** universally unlock LDAC, aptX HD, or aptX Adaptive.
@@ -40,10 +41,10 @@ a replacement driver — not a registry tweak. See [research](docs/RESEARCH.md) 
 | SBC | Yes | No supported API |
 | AAC | Yes (21H2+) | No supported API |
 | aptX Classic | Yes | No supported API |
-| aptX HD | No | No |
-| aptX Adaptive | Select Qualcomm 24H2 devices | No |
-| LDAC | No | No |
-| LC3 / LE Audio | Separate vendor LE Audio path | No |
+| aptX HD | No | Provider-gated |
+| aptX Adaptive | Select Qualcomm 24H2 devices | Provider-gated / OEM |
+| LDAC | No | Provider-gated |
+| LC3 / LE Audio | Separate vendor LE Audio path | Not an A2DP provider codec |
 
 Bluu shows what it can observe and explains the rest.
 
@@ -54,7 +55,8 @@ Bluu shows what it can observe and explains the rest.
 3. Run `bluu.exe` as a normal user.
 4. Pair/connect the headset in Windows Settings.
 5. Use **Verify live codec** only when you want to approve a one-time elevation
-   prompt for the ETW helper.
+   prompt for the ETW helper. Advanced codec control requires an explicitly
+   installed provider; see [provider API](docs/PROVIDER-API.md).
 
 No installer service, driver, or startup task is created by the portable build.
 
@@ -106,6 +108,7 @@ crates/bluu-core       domain, codec facts, diagnostics, SDP, privacy, settings
 crates/bluu-platform   Windows + demo backends, screenshot fixture renderer
 crates/bluu-app        egui desktop application
 crates/bluu-etw-helper short-lived elevated ETW observer
+crates/bluu-provider-demo simulated provider protocol fixture
 ```
 
 See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and
@@ -115,10 +118,12 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and
 
 On the development host (macOS, no Windows radio):
 
-- 21 core tests and 2 platform tests pass;
+- 33 core/provider/app tests and 5 platform tests pass;
 - formatting and Clippy with `-D warnings` pass;
 - the Windows target type-checks;
-- the demo UI/screenshot renderer builds.
+- the demo UI/screenshot renderer builds;
+- the provider apply/verify/rollback protocol is exercised end-to-end against a
+  simulated provider.
 
 Run the same local gate with:
 

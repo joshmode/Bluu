@@ -8,7 +8,8 @@
 - Separate capability/configuration/negotiated/observed/verified fields.
 - Optional elevated ETW observation with explicit evidence labels.
 - Diagnostics with actionable findings, redacted export, local settings.
-- No codec preference controls because no supported API exists.
+- Codec preference controls through validated advanced providers; the in-box stack
+  still has no supported preference API.
 
 ## v0.2 — validation and polish
 

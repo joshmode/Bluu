@@ -1,9 +1,13 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod app;
+mod provider_defaults;
 mod theme;
 mod ui;
 mod worker;
+
+#[cfg(test)]
+mod provider_tests;
 
 use std::path::PathBuf;
 

@@ -6,7 +6,7 @@ in `docs/ARCHITECTURE.md` and `docs/RESEARCH.md`.
 | ID | Date | Decision | Why |
 |---|---|---|---|
 | D-001 | 2026-10-27 | No registry codec toggles | Undocumented, build-dependent, and not codec registration |
-| D-002 | 2026-10-27 | No driver/stack replacement in v0.1 | Kernel signing, Secure Boot, recovery, and support burden |
+| D-002 | 2026-10-27 | No bundled driver/stack replacement; provider-gated | Signing, Secure Boot, recovery, and support burden remain the provider's responsibility |
 | D-003 | 2026-10-27 | Codec inventory ≠ active codec | Prevents false “unlocked” claims |
 | D-004 | 2026-10-27 | ETW observation is elevated and one-shot | Least privilege; helper has no configuration path |
 | D-005 | 2026-10-27 | Unknown vendor tuples stay unknown | Avoids mislabeling Low Latency/Adaptive/Lossless |

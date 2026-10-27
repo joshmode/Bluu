@@ -24,10 +24,10 @@ reports. Redact logs.
 
 ## Scope
 
-In scope: privilege boundaries, the ETW helper argument/path handling, parser
+In scope: privilege boundaries, the ETW helper/provider argument and path handling, parser
 panics/memory safety, export redaction, supply-chain/licence issues, and unsafe
 Windows FFI usage.
 
-Out of scope: claims that Bluu does not unlock LDAC/aptX HD (documented limitation),
+Out of scope: third-party provider driver defects, codec licensing disputes, and
 issues requiring a malicious kernel driver or already-compromised administrator
-account.
+account. A provider must publish its own signing, recovery, and support policy.

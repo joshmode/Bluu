@@ -57,7 +57,8 @@ fn error_text(error: &bluu_core::backend::BackendError) -> String {
         | bluu_core::backend::BackendError::DeviceAccess(s)
         | bluu_core::backend::BackendError::AudioAccess(s)
         | bluu_core::backend::BackendError::Unsupported(s)
-        | bluu_core::backend::BackendError::InvalidInput(s) => s.clone(),
+        | bluu_core::backend::BackendError::InvalidInput(s)
+        | bluu_core::backend::BackendError::Provider(s) => s.clone(),
         bluu_core::backend::BackendError::Cancelled => "cancelled".into(),
     }
 }

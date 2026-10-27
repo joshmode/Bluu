@@ -28,6 +28,9 @@ cargo build --workspace --release --target x86_64-pc-windows-msvc
 `bluu-etw-helper.exe` must be beside `bluu.exe`. The app never launches it unless
 the user clicks **Verify live codec** and approves the UAC prompt.
 
+`bluu-provider-demo.exe` is an optional test fixture for the provider protocol. It
+does not affect Bluetooth or audio and should not be presented as codec support.
+
 ## Reproducible build notes
 
 - `Cargo.lock` is committed.

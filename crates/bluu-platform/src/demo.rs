@@ -1,5 +1,5 @@
-//! Clearly labelled demonstration data. The backend capability flags deliberately mirror
-//! the native read-only backend: it can inspect but cannot set codec preferences.
+//! Clearly labelled demonstration data. It can inspect provider preferences and
+//! exercise the provider workflow, but provider actions remain simulated.
 
 use bluu_core::{
     backend::{BackendCapabilities, BackendDescriptor, BackendError},
@@ -63,10 +63,14 @@ impl AudioBackend for DemoBackend {
             read_endpoint_formats: true,
             observe_active_codec: true,
             observe_codec_parameters: false,
-            configure_preferred_codec: false,
-            configure_codec_parameters: false,
+            configure_preferred_codec: true,
+            configure_codec_parameters: true,
             configure_endpoint_format: false,
-            supported_operations: vec![],
+            supported_operations: vec![
+                bluu_core::ConfigOperation::SetPreferredCodec,
+                bluu_core::ConfigOperation::SetCodecPriority,
+                bluu_core::ConfigOperation::SetQualityPreference,
+            ],
         }
     }
 
@@ -217,6 +221,7 @@ impl AudioBackend for DemoBackend {
             "All active-codec observations in demo mode are synthetic and must not be used as evidence."
                 .into(),
         );
+        snapshot.providers = demo_provider();
         Ok(snapshot)
     }
 
@@ -228,4 +233,53 @@ impl AudioBackend for DemoBackend {
         self.captured = outcome.observation.clone();
         Ok(outcome)
     }
+
+    fn provider_operation(
+        &mut self,
+        request: &bluu_core::model::ProviderOperationRequest,
+    ) -> Result<bluu_core::model::ProviderOperationOutcome, bluu_core::backend::BackendError> {
+        crate::providers::demo_operation(request)
+    }
+}
+
+fn demo_provider() -> Vec<bluu_core::ProviderRecord> {
+    serde_json::from_value(serde_json::json!({
+        "manifest": {
+            "api_version": 1,
+            "id": "demo.ldac",
+            "name": "Demo LDAC / aptX HD provider",
+            "version": "0.1.0",
+            "executable": "bluu-provider-demo.exe",
+            "publisher": "Bluu test fixture",
+            "homepage": "https://github.com/joshmode/Bluu",
+            "description": "Protocol fixture only. Does not touch Bluetooth or audio.",
+            "requires_elevation": false,
+            "stack": "simulated",
+            "capabilities": {
+                "preferred_codec": true,
+                "priority": true,
+                "parameters": true,
+                "active_codec": true,
+                "rollback": true,
+                "dry_run": true
+            },
+            "codecs": [
+                {"codec": "ldac", "notes": "DEMO ONLY", "hardware_validated": true, "remote_validated": false, "parameters": [
+                    {"kind": "choice", "key": "ldac_quality", "label": "LDAC quality",
+                     "options": ["330", "660", "990"], "default": "990",
+                     "note": "Fixture values; no transport exists."}
+                ]},
+                {"codec": "aptx_hd", "notes": "DEMO ONLY", "hardware_validated": true, "remote_validated": false, "parameters": []},
+                {"codec": "aptx_adaptive", "notes": "DEMO ONLY", "hardware_validated": true, "remote_validated": false, "parameters": []},
+                {"codec": "sbc", "notes": "Fallback", "hardware_validated": true, "remote_validated": true, "parameters": []}
+            ]
+        },
+        "manifest_path": "demo/provider.json",
+        "directory": "demo",
+        "status": "ready",
+        "issues": [],
+        "executable_sha256": "demo-fixture",
+        "simulated": true
+    }))
+    .unwrap_or_default()
 }

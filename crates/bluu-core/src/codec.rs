@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CodecId {
     Sbc,
     Aac,
@@ -16,7 +15,47 @@ pub enum CodecId {
     Other,
 }
 
+impl Serialize for CodecId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.key())
+    }
+}
+
+impl<'de> Deserialize<'de> for CodecId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        CodecId::from_key(&value).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unknown codec key '{value}'; expected one of sbc, aac, aptx, aptx_hd, aptx_low_latency, aptx_adaptive, aptx_lossless, ldac, lc3, mp3, other"
+            ))
+        })
+    }
+}
+
 impl CodecId {
+    pub fn from_key(value: &str) -> Option<Self> {
+        Some(match value {
+            "sbc" => Self::Sbc,
+            "aac" => Self::Aac,
+            "aptx" => Self::AptX,
+            "aptx_hd" => Self::AptXHd,
+            "aptx_low_latency" => Self::AptXLowLatency,
+            "aptx_adaptive" => Self::AptXAdaptive,
+            "aptx_lossless" => Self::AptXLossless,
+            "ldac" => Self::Ldac,
+            "lc3" => Self::Lc3,
+            "mp3" => Self::Mp3,
+            "other" => Self::Other,
+            _ => return None,
+        })
+    }
+
     pub const ALL: [CodecId; 11] = [
         Self::Sbc,
         Self::Aac,
@@ -122,7 +161,10 @@ impl CodecId {
 #[serde(rename_all = "snake_case")]
 pub enum CodecState {
     ActiveVerified,
+    ActiveProviderAttested,
     ActiveUnverified,
+    ProviderPreferenceApplied,
+    ProviderAvailable,
     SupportedAvailable,
     HardwareOnly,
     UnavailableOnBackend,
@@ -134,7 +176,10 @@ impl CodecState {
     pub fn label(self) -> &'static str {
         match self {
             Self::ActiveVerified => "Active · independently verified",
+            Self::ActiveProviderAttested => "Active · provider-attested",
             Self::ActiveUnverified => "Active · not independently verified",
+            Self::ProviderPreferenceApplied => "Provider preference applied · active not verified",
+            Self::ProviderAvailable => "Available through an advanced codec provider",
             Self::SupportedAvailable => "Supported by this Windows stack",
             Self::HardwareOnly => "Hardware support only; not exposed by this stack",
             Self::UnavailableOnBackend => "Not available through this backend",
@@ -144,7 +189,10 @@ impl CodecState {
     }
 
     pub fn is_active(self) -> bool {
-        matches!(self, Self::ActiveVerified | Self::ActiveUnverified)
+        matches!(
+            self,
+            Self::ActiveVerified | Self::ActiveProviderAttested | Self::ActiveUnverified
+        )
     }
 }
 
@@ -193,6 +241,7 @@ impl Evidence {
 pub enum VerificationMethod {
     None,
     A2dpEtwEvent,
+    ProviderReport,
     UserProvidedTrace,
     ManualExternalAnalyzer,
 }
@@ -202,6 +251,7 @@ impl VerificationMethod {
         match self {
             Self::None => "none",
             Self::A2dpEtwEvent => "A2DP streaming trace (ETW)",
+            Self::ProviderReport => "advanced codec provider report",
             Self::UserProvidedTrace => "user-provided protocol trace",
             Self::ManualExternalAnalyzer => "external analyzer",
         }
@@ -238,6 +288,8 @@ pub struct CodecReport {
     pub negotiated: CodecFact<CodecId>,
     pub observed_active: CodecFact<CodecId>,
     pub verification: VerificationMethod,
+    pub provider_selectable: bool,
+    pub provider_ids: Vec<String>,
     pub confidence: Confidence,
     pub observed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub summary: String,

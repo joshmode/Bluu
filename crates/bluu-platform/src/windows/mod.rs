@@ -16,7 +16,10 @@ mod system;
 
 use bluu_core::{
     backend::{BackendCapabilities, BackendDescriptor, BackendError, ConfigOperation},
-    model::{CaptureOutcome, CaptureRequest, Snapshot},
+    model::{
+        CaptureOutcome, CaptureRequest, ProviderOperationOutcome, ProviderOperationRequest,
+        Snapshot,
+    },
     AudioBackend,
 };
 
@@ -62,10 +65,14 @@ impl AudioBackend for WindowsBackend {
             read_endpoint_formats: true,
             observe_active_codec: true,
             observe_codec_parameters: false,
-            configure_preferred_codec: false,
-            configure_codec_parameters: false,
+            configure_preferred_codec: true,
+            configure_codec_parameters: true,
             configure_endpoint_format: false,
-            supported_operations: Vec::<ConfigOperation>::new(),
+            supported_operations: vec![
+                ConfigOperation::SetPreferredCodec,
+                ConfigOperation::SetCodecPriority,
+                ConfigOperation::SetQualityPreference,
+            ],
         }
     }
 
@@ -74,6 +81,11 @@ impl AudioBackend for WindowsBackend {
         snapshot.backend = self.descriptor();
         audio::scan(&mut snapshot)?;
         bluetooth::scan(&mut snapshot)?;
+        snapshot.providers = crate::providers::discover();
+        snapshot.provider_preferences = crate::providers::load_preferences();
+        if self.captured_codec.is_none() {
+            self.captured_codec = crate::providers::load_observation();
+        }
         // A previously observed codec is not automatically still active after a
         // scan, reconnect, or reboot. Keep it only if the selected device is
         // connected and the observation is younger than the configured capture
@@ -102,5 +114,12 @@ impl AudioBackend for WindowsBackend {
             self.captured_codec = Some(observation);
         }
         Ok(outcome)
+    }
+
+    fn provider_operation(
+        &mut self,
+        request: &ProviderOperationRequest,
+    ) -> Result<ProviderOperationOutcome, BackendError> {
+        crate::providers::operation(request, self.last_snapshot.as_ref())
     }
 }

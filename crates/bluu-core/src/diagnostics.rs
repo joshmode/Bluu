@@ -55,6 +55,20 @@ fn codec_report(
     let observed_for_codec = observation.filter(|o| o.codec == codec);
     let connected = device.map(|d| d.connected).unwrap_or(false);
     let a2dp = device.and_then(BluetoothAudioDevice::supports_a2dp);
+    let provider_ids: Vec<String> = snapshot
+        .providers
+        .iter()
+        .filter(|p| p.is_usable() && p.supports(codec))
+        .map(|p| p.manifest.id.clone())
+        .collect();
+    let provider_selectable = !provider_ids.is_empty();
+    let provider_preference = device.and_then(|d| {
+        snapshot.provider_preferences.iter().find(|pref| {
+            pref.device_id == d.id
+                && provider_ids.iter().any(|id| id == &pref.provider_id)
+                && pref.ordered_codecs.contains(&codec)
+        })
+    });
     let hfp_active = device.is_some_and(|d| {
         snapshot
             .selected_capture_endpoint(Some(d))
@@ -78,19 +92,32 @@ fn codec_report(
             ],
         )
     } else if let Some(obs) = observed_for_codec {
-        let verified = obs.device_id.is_some()
+        let provider_attested = obs.device_id.is_some()
             && obs.device_association_confidence == Confidence::High
-            && obs.method == VerificationMethod::A2dpEtwEvent;
+            && obs.method == VerificationMethod::ProviderReport;
+        let independently_verified = obs.device_id.is_some()
+            && obs.device_association_confidence == Confidence::High
+            && matches!(
+                obs.method,
+                VerificationMethod::UserProvidedTrace | VerificationMethod::ManualExternalAnalyzer
+            );
         (
-            if verified {
+            if independently_verified {
                 CodecState::ActiveVerified
+            } else if provider_attested {
+                CodecState::ActiveProviderAttested
             } else {
                 CodecState::ActiveUnverified
             },
-            if verified {
+            if independently_verified {
                 format!(
                     "A2DP negotiation observed and tied to this device by {}.",
                     obs.method.label()
+                )
+            } else if provider_attested {
+                format!(
+                    "The advanced provider attests that {} is active on this device. This is provider evidence, not an independent trace.",
+                    codec.label()
                 )
             } else {
                 format!(
@@ -99,10 +126,43 @@ fn codec_report(
                     obs.device_association_confidence.label()
                 )
             },
+            {
+                let mut limits = vec![
+                    "Observed negotiation does not measure perceived quality.".into(),
+                    "Windows does not expose codec bitrate or bitpool through a stable public API."
+                        .into(),
+                ];
+                if provider_ids.is_empty() {
+                    limits.push(
+                        "No installed advanced provider advertises this codec for configuration."
+                            .into(),
+                    );
+                }
+                limits
+            },
+        )
+    } else if provider_preference.is_some() {
+        (
+            CodecState::ProviderPreferenceApplied,
+            format!(
+                "A preference including {} was applied through an advanced provider. Negotiation is not verified until the provider reports an active codec or an independent trace confirms it.",
+                codec.label()
+            ),
             vec![
-                "Observed negotiation does not measure perceived quality.".into(),
-                "Windows does not expose codec bitrate or bitpool through a stable public API."
-                    .into(),
+                "Provider preference is not proof of active transmission.".into(),
+                "The provider owns driver, transport, and codec licensing.".into(),
+            ],
+        )
+    } else if provider_selectable {
+        (
+            CodecState::ProviderAvailable,
+            format!(
+                "{} is advertised by an installed advanced codec provider. Hardware and remote capability are verified when the provider applies the preference.",
+                codec.label()
+            ),
+            vec![
+                "This is a provider capability, not an in-box Windows capability.".into(),
+                "The provider must validate the radio and remote device before claiming success.".into(),
             ],
         )
     } else if native_inventory.contains(&codec) {
@@ -151,7 +211,15 @@ fn codec_report(
         "The device's A2DP capability could not be determined from the available records."
     };
 
-    let capability = if codec == CodecId::Other {
+    let capability = if provider_selectable {
+        CodecFact {
+            value: Some(true),
+            evidence: Evidence::Inferred,
+            confidence: Confidence::Medium,
+            method: format!("Provider manifest: {}", provider_ids.join(", ")),
+            note: "The installed provider advertises this codec. The remote device and hardware still need provider validation.".into(),
+        }
+    } else if codec == CodecId::Other {
         CodecFact {
             value: None,
             evidence: Evidence::Unverified,
@@ -216,7 +284,11 @@ fn codec_report(
             evidence: Evidence::Observed,
             confidence: o.device_association_confidence,
             method: o.method.label().into(),
-            note: "The A2dpStreaming event reported this codec ID.".into(),
+            note: if o.method == VerificationMethod::ProviderReport {
+                "The advanced codec provider reported this active codec. See its verification method and caveats.".into()
+            } else {
+                "The A2dpStreaming event reported this codec ID.".into()
+            },
         })
         .unwrap_or_else(|| {
             CodecFact::unavailable(
@@ -225,13 +297,26 @@ fn codec_report(
             )
         });
 
-    let configuration = CodecFact::unavailable(
-        "No supported Windows API",
-        format!(
-            "Bluu can read system format and connection state, but cannot set {} codec priority, sample rate, channels, or bitrate.",
-            codec.label()
-        ),
-    );
+    let configuration = if provider_selectable {
+        CodecFact {
+            value: Some(provider_ids.join(", ")),
+            evidence: Evidence::Inferred,
+            confidence: Confidence::Medium,
+            method: "Advanced codec provider API".into(),
+            note: format!(
+                "{} can be configured through an installed provider. Open Providers to choose priority and parameters.",
+                codec.label()
+            ),
+        }
+    } else {
+        CodecFact::unavailable(
+            "No supported Windows API or installed provider",
+            format!(
+                "Bluu cannot set {} codec priority, sample rate, channels, or bitrate without a provider.",
+                codec.label()
+            ),
+        )
+    };
 
     let observed_at = observed_for_codec.map(|o| o.observed_at);
     let confidence = match observed_for_codec {
@@ -258,8 +343,14 @@ fn codec_report(
         verification: observed_for_codec
             .map(|o| o.method)
             .unwrap_or(VerificationMethod::None),
+        provider_selectable,
+        provider_ids,
         confidence,
-        observed_at,
+        observed_at: if observed_for_codec.is_some() {
+            observed_at
+        } else {
+            None
+        },
         summary,
         limitations,
     }
@@ -400,6 +491,26 @@ pub fn findings(
             evidence: Evidence::Documented,
         });
     }
+    if let Some(provider) = snapshot.providers.iter().find(|p| p.is_usable()) {
+        out.push(DiagnosticFinding {
+            severity: Severity::Info,
+            title: "Advanced codec provider available".into(),
+            detail: format!(
+                "{} advertises {} and may control the A2DP encoder/transport.",
+                provider.manifest.name,
+                provider
+                    .manifest
+                    .codecs
+                    .iter()
+                    .map(|c| c.codec.label())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            action: "Open Providers to review the manifest and apply a preference. Verify the active codec separately."
+                .into(),
+            evidence: Evidence::Inferred,
+        });
+    }
     out
 }
 
@@ -480,6 +591,58 @@ mod tests {
         let reports = codec_reports(&s, Some(&device()));
         let ldac = reports.iter().find(|r| r.codec == CodecId::Ldac).unwrap();
         assert_eq!(ldac.state, CodecState::UnavailableOnBackend);
+    }
+
+    #[test]
+    fn provider_availability_is_separate_from_active_state() {
+        let mut s = snapshot(22_631);
+        let mut provider: crate::ProviderRecord = serde_json::from_value(serde_json::json!({
+            "manifest": {
+                "api_version": 1, "id": "vendor.ldac", "name": "Vendor LDAC",
+                "version": "1", "executable": "provider.exe", "stack": "vendor_service",
+                "capabilities": {"preferred_codec": true, "active_codec": true},
+                "codecs": [{"codec": "ldac"}, {"codec": "aptx_hd"}]
+            },
+            "manifest_path": "x", "directory": "x", "status": "ready",
+            "issues": [], "executable_sha256": "x", "simulated": false
+        }))
+        .unwrap();
+        provider.status = crate::ProviderStatus::Ready;
+        s.providers.push(provider);
+        let reports = codec_reports(&s, Some(&device()));
+        let ldac = reports.iter().find(|r| r.codec == CodecId::Ldac).unwrap();
+        assert_eq!(ldac.state, CodecState::ProviderAvailable);
+        assert!(ldac.provider_selectable);
+        assert!(ldac.observed_active.value.is_none());
+    }
+
+    #[test]
+    fn provider_preference_is_not_reported_active() {
+        let mut s = snapshot(22_631);
+        s.providers.push(
+            serde_json::from_value(serde_json::json!({
+                "manifest": {
+                    "api_version": 1, "id": "vendor.ldac", "name": "Vendor LDAC",
+                    "version": "1", "executable": "provider.exe", "stack": "vendor_service",
+                    "capabilities": {"preferred_codec": true},
+                    "codecs": [{"codec": "ldac"}]
+                },
+                "manifest_path": "x", "directory": "x", "status": "ready",
+                "issues": [], "executable_sha256": "x", "simulated": false
+            }))
+            .unwrap(),
+        );
+        s.provider_preferences.push(crate::ProviderPreference {
+            provider_id: "vendor.ldac".into(),
+            device_id: "dev".into(),
+            ordered_codecs: vec![CodecId::Ldac],
+            parameters: Default::default(),
+            dry_run: false,
+        });
+        let reports = codec_reports(&s, Some(&device()));
+        let ldac = reports.iter().find(|r| r.codec == CodecId::Ldac).unwrap();
+        assert_eq!(ldac.state, CodecState::ProviderPreferenceApplied);
+        assert!(!ldac.state.is_active());
     }
 
     #[test]

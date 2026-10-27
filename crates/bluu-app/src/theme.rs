@@ -207,7 +207,10 @@ pub fn state_color(state: bluu_core::CodecState) -> Color32 {
     use bluu_core::CodecState;
     match state {
         CodecState::ActiveVerified => good(),
+        CodecState::ActiveProviderAttested => good(),
         CodecState::ActiveUnverified => warn(),
+        CodecState::ProviderPreferenceApplied => accent(),
+        CodecState::ProviderAvailable => violet(),
         CodecState::SupportedAvailable => accent(),
         CodecState::HardwareOnly => violet(),
         CodecState::UnavailableOnBackend | CodecState::Unsupported => bad(),

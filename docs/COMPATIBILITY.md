@@ -13,7 +13,8 @@ Status: code targets documented APIs; hardware validation pending.
 | aptX Classic in-box | Listed 1507+ | Listed | Listed | Listed | Radio/driver caveats |
 | aptX Adaptive | No | No | No | Select Qualcomm devices | OEM-specific |
 | LE Audio | No | 22H2+ vendor path | Vendor path | Vendor path | ACX/VSAP |
-| Shared-mode codec preference | No supported API | No supported API | No supported API | No supported API | Not offered by Bluu |
+| Shared-mode codec preference | No supported in-box API | No supported in-box API | No supported in-box API | No supported in-box API | Provider-gated advanced path |
+| LDAC / aptX HD via provider | Provider-dependent | Provider-dependent | Provider-dependent | Provider-dependent | Requires installed provider + capable hardware |
 
 ## Architecture support
 

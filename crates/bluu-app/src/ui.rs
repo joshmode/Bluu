@@ -4,6 +4,7 @@ use bluu_core::{
     feasibility::*,
     model::{AudioEndpoint, BluetoothAudioDevice, EndpointState},
     settings::ThemePreference,
+    ProviderAction,
 };
 use eframe::egui::{self, Align, Color32, Layout, RichText, Sense, Stroke, Ui, Vec2};
 
@@ -14,15 +15,17 @@ pub enum NavSection {
     Home,
     Devices,
     Codecs,
+    Providers,
     Diagnostics,
     Settings,
 }
 
 impl NavSection {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Home,
         Self::Devices,
         Self::Codecs,
+        Self::Providers,
         Self::Diagnostics,
         Self::Settings,
     ];
@@ -32,6 +35,7 @@ impl NavSection {
             Self::Home => "Home",
             Self::Devices => "Devices",
             Self::Codecs => "Codecs",
+            Self::Providers => "Providers",
             Self::Diagnostics => "Diagnostics",
             Self::Settings => "Settings",
         }
@@ -391,8 +395,8 @@ pub fn home(app: &mut BluuApp, ui: &mut Ui) {
             pill(ui, "SBC", theme::good());
             pill(ui, "AAC on Windows 11", theme::good());
             pill(ui, "aptX in-box", theme::good());
-            pill(ui, "aptX Adaptive: select Qualcomm OEMs", theme::warn());
-            pill(ui, "LDAC / aptX HD: not in-box", theme::bad());
+            pill(ui, "aptX Adaptive: select Qualcomm OEMs / provider", theme::warn());
+            pill(ui, "LDAC / aptX HD: provider-gated", theme::violet());
             pill(ui, "LE Audio: vendor ACX path", theme::violet());
         });
     });
@@ -496,6 +500,7 @@ pub fn devices(app: &mut BluuApp, ui: &mut Ui) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui.button("Select in sidebar").clicked() {
                         app.selected_device = Some(device.id.clone());
+                        app.refresh_provider_selection();
                         app.save_settings();
                     }
                     if device.connected {
@@ -653,6 +658,7 @@ pub fn devices(app: &mut BluuApp, ui: &mut Ui) {
             .response;
         if response.interact(Sense::click()).clicked() {
             app.selected_device = Some(device.id.clone());
+            app.refresh_provider_selection();
             app.save_settings();
         }
         ui.add_space(6.0);
@@ -855,7 +861,11 @@ pub fn codecs(app: &mut BluuApp, ui: &mut Ui) {
                 fact_block(
                     &mut columns[1],
                     "Configuration",
-                    "Not exposed",
+                    report
+                        .configuration
+                        .value
+                        .as_deref()
+                        .unwrap_or("Not exposed"),
                     &report.configuration.note,
                     report.configuration.confidence,
                 );
@@ -1301,14 +1311,14 @@ pub fn settings(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
         ui.horizontal_wrapped(|ui| {
             pill(ui, "Standard user UI", theme::good());
             pill(ui, "No registry writes", theme::good());
-            pill(ui, "No driver installation", theme::good());
+            pill(ui, "Provider-gated driver path", theme::warn());
             pill(ui, "No background service", theme::good());
             pill(ui, "No network code", theme::good());
         });
         ui.add_space(8.0);
         ui.label(
             RichText::new(
-                "The only elevation is a short-lived ETW helper used to observe the negotiated codec. It has no configuration path and writes one result file.",
+                "Bluu's own elevation is limited to the short-lived ETW helper and, for an advanced provider, the provider's separately declared elevation prompt. A provider may install/control a vendor driver or service under its own signed installer and licence.",
             )
             .size(10.8)
             .color(theme::muted()),
@@ -1404,4 +1414,388 @@ pub fn error_banner(ui: &mut Ui, title: &str, detail: &str) {
             ui.label(RichText::new(title).size(12.5).strong().color(theme::bad()));
             ui.label(RichText::new(detail).size(11.0).color(theme::text()));
         });
+}
+
+/// Advanced provider management. This page is intentionally explicit that the
+/// provider owns driver/transport/licensing; Bluu only validates and invokes it.
+pub fn providers(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
+    let snapshot = app.snapshot.clone();
+    let device = app.current_device().cloned();
+    page_heading(
+        ui,
+        "Advanced providers",
+        "Codec preference through an explicit provider",
+        "Windows has no public codec-registration API. A provider supplies the encoder/transport and may replace the A2DP driver. Bluu validates and invokes it; it does not bundle proprietary codecs.",
+    );
+    let Some(snapshot) = snapshot else {
+        empty_state(
+            ui,
+            "No scan yet",
+            "Refresh to discover providers and devices.",
+        );
+        return;
+    };
+    app.ensure_provider_selection();
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Install provider folder…").clicked() {
+            app.find_provider_package();
+        }
+        if app.selected_provider.is_some() && ui.button("Remove provider package").clicked() {
+            app.remove_selected_provider();
+        }
+    });
+    if let Some((ok, message)) = &app.provider_note {
+        ui.add_space(6.0);
+        notice_banner(ui, *ok, message);
+    }
+    ui.add_space(10.0);
+    if snapshot.providers.is_empty() {
+        theme::subtle_panel().show(ui, |ui| {
+            section_heading(
+                ui,
+                "No provider installed",
+                Some("This is expected for a clean build"),
+            );
+            ui.label(
+                RichText::new(
+                    "Use Install provider folder… or place a provider directory under %LOCALAPPDATA%\\Bluu\\providers or beside bluu.exe. A provider manifest can advertise LDAC, aptX HD, aptX Adaptive, or a vendor codec only when its driver/service implements that codec and transport.",
+                )
+                .size(11.5)
+                .color(theme::muted()),
+            );
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!(
+                    "Search path: {}",
+                    bluu_core::settings::provider_dir().display()
+                ))
+                .size(10.5)
+                .color(theme::faint()),
+            );
+        });
+        return;
+    }
+
+    ui.label(
+        RichText::new("PROVIDERS")
+            .size(10.0)
+            .strong()
+            .color(theme::faint()),
+    );
+    for record in &snapshot.providers {
+        let selected = app.selected_provider.as_deref() == Some(record.manifest.id.as_str());
+        let color = if selected {
+            theme::accent()
+        } else if record.is_usable() {
+            theme::good()
+        } else {
+            theme::bad()
+        };
+        let response = theme::subtle_panel()
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    dot(ui, color);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new(&record.manifest.name)
+                                .size(14.5)
+                                .strong()
+                                .color(theme::text()),
+                        );
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {} · {} · {}",
+                                record.manifest.version,
+                                record.manifest.stack.label(),
+                                record.manifest.publisher,
+                                if record.manifest.requires_elevation {
+                                    "UAC required"
+                                } else {
+                                    "standard user"
+                                }
+                            ))
+                            .size(10.5)
+                            .color(theme::muted()),
+                        );
+                    });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        pill(ui, &record.manifest.id, color);
+                    });
+                });
+                if !record.issues.is_empty() {
+                    ui.add_space(5.0);
+                    for issue in &record.issues {
+                        ui.label(
+                            RichText::new(format!("• {issue}"))
+                                .size(10.5)
+                                .color(theme::bad()),
+                        );
+                    }
+                }
+                ui.add_space(5.0);
+                ui.label(
+                    RichText::new(format!(
+                        "Codecs: {}",
+                        record
+                            .manifest
+                            .codecs
+                            .iter()
+                            .map(|c| c.codec.label())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                    .size(10.5)
+                    .color(theme::muted()),
+                );
+            })
+            .response;
+        if response.interact(Sense::click()).clicked() {
+            app.select_provider(record.manifest.id.clone());
+        }
+        ui.add_space(7.0);
+    }
+    ui.add_space(10.0);
+
+    let Some(record) = app.selected_provider_record().cloned() else {
+        return;
+    };
+    let Some(device) = device else {
+        empty_state(
+            ui,
+            "No device selected",
+            "Connect and select headphones first.",
+        );
+        return;
+    };
+    if !device.connected {
+        notice_banner(
+            ui,
+            false,
+            "The selected device is disconnected; Apply/Verify are disabled.",
+        );
+        ui.add_space(8.0);
+    }
+
+    theme::hero_panel().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(
+                    RichText::new(format!("{} → {}", record.manifest.name, device.name))
+                        .size(18.0)
+                        .strong(),
+                );
+                ui.label(
+                    RichText::new(
+                        "The provider owns codec encoding, A2DP transport, driver signing, and licensing. A preference is not an active-codec claim.",
+                    )
+                    .size(10.8)
+                    .color(theme::muted()),
+                );
+            });
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                pill(ui, record.manifest.stack.label(), theme::violet());
+            });
+        });
+        ui.add_space(10.0);
+        if !record.simulated {
+            ui.checkbox(
+                &mut app.provider_consented,
+                "I understand this provider may change system/audio settings or control a driver/service, under its publisher's terms.",
+            );
+        }
+        ui.add_space(8.0);
+        section_heading(ui, "Preference order", Some("First codec has highest priority"));
+        let all = record.manifest.codecs.clone();
+        for (index, codec) in app.provider_order.clone().iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!("{}. {}", index + 1, codec.label()))
+                        .size(12.0)
+                        .color(theme::text()),
+                );
+                if index > 0 && ui.small_button("Up").clicked() {
+                    app.provider_order.swap(index, index - 1);
+                }
+                if index + 1 < app.provider_order.len() && ui.small_button("Down").clicked() {
+                    app.provider_order.swap(index, index + 1);
+                }
+                if ui.small_button("Remove").clicked() {
+                    app.provider_order.remove(index);
+                }
+            });
+        }
+        ui.horizontal_wrapped(|ui| {
+            for codec in &all {
+                if !app.provider_order.contains(&codec.codec)
+                    && ui.small_button(format!("+ {}", codec.codec.label())).clicked()
+                {
+                    app.provider_order.push(codec.codec);
+                }
+            }
+        });
+        ui.add_space(8.0);
+        for codec in app.provider_order.clone() {
+            if let Some(entry) = record.manifest.codecs.iter().find(|c| c.codec == codec) {
+                if entry.parameters.is_empty() {
+                    continue;
+                }
+                ui.label(
+                    RichText::new(format!("{} parameters", codec.label()))
+                        .size(11.0)
+                        .strong()
+                        .color(theme::text()),
+                );
+                for parameter in &entry.parameters {
+                    match parameter {
+                        bluu_core::ProviderParameter::Choice {
+                            key,
+                            label,
+                            options,
+                            note,
+                            ..
+                        } => {
+                            let current = app
+                                .provider_parameters
+                                .get(key)
+                                .cloned()
+                                .unwrap_or_else(|| parameter.default_value());
+                            egui::ComboBox::from_label(label.as_str())
+                                .selected_text(current.clone())
+                                .show_ui(ui, |ui| {
+                                    for option in options {
+                                        if ui
+                                            .selectable_label(current == *option, option)
+                                            .clicked()
+                                        {
+                                            app.provider_parameters
+                                                .insert(key.clone(), option.clone());
+                                        }
+                                    }
+                                });
+                            if !note.is_empty() {
+                                ui.label(
+                                    RichText::new(note).size(9.8).color(theme::faint()),
+                                );
+                            }
+                        }
+                        bluu_core::ProviderParameter::Integer {
+                            key,
+                            label,
+                            min,
+                            max,
+                            unit,
+                            note,
+                            ..
+                        } => {
+                            let mut current = app
+                                .provider_parameters
+                                .get(key)
+                                .and_then(|v| v.parse::<i64>().ok())
+                                .unwrap_or(*min);
+                            if ui
+                                .add(egui::Slider::new(&mut current, *min..=*max).text(label))
+                                .changed()
+                            {
+                                app.provider_parameters
+                                    .insert(key.clone(), current.to_string());
+                            }
+                            let _ = unit;
+                            if !note.is_empty() {
+                                ui.label(
+                                    RichText::new(note).size(9.8).color(theme::faint()),
+                                );
+                            }
+                        }
+                        bluu_core::ProviderParameter::Boolean {
+                            key,
+                            label,
+                            note,
+                            ..
+                        } => {
+                            let mut current = app
+                                .provider_parameters
+                                .get(key)
+                                .map(|v| v == "true")
+                                .unwrap_or(false);
+                            if ui.checkbox(&mut current, label).changed() {
+                                app.provider_parameters
+                                    .insert(key.clone(), current.to_string());
+                            }
+                            if !note.is_empty() {
+                                ui.label(
+                                    RichText::new(note).size(9.8).color(theme::faint()),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ui.add_space(10.0);
+        ui.horizontal_wrapped(|ui| {
+            let can_apply = !app.provider_busy
+                && device.connected
+                && record.is_usable()
+                && (record.simulated || app.provider_consented);
+            if ui
+                .add_enabled(
+                    can_apply,
+                    egui::Button::new("Apply preference").fill(theme::accent_soft()),
+                )
+                .clicked()
+            {
+                app.provider_operation(ProviderAction::Apply);
+            }
+            if ui
+                .add_enabled(
+                    can_apply,
+                    egui::Button::new("Verify active codec"),
+                )
+                .clicked()
+            {
+                app.provider_operation(ProviderAction::Verify);
+            }
+            if ui
+                .add_enabled(!app.provider_busy, egui::Button::new("Rollback"))
+                .clicked()
+            {
+                app.provider_rollback();
+            }
+            if app.provider_busy {
+                ui.spinner();
+                ui.label(RichText::new("Provider operation running…").color(theme::muted()));
+            }
+        });
+        if let Some((ok, note)) = &app.provider_note {
+            ui.add_space(8.0);
+            notice_banner(ui, *ok, note);
+        }
+    });
+
+    ui.add_space(12.0);
+    theme::subtle_panel().show(ui, |ui| {
+        section_heading(ui, "Provider identity and evidence", None);
+        key_value(ui, "Manifest", &record.manifest_path);
+        key_value(ui, "Provider", &record.manifest.name);
+        key_value(
+            ui,
+            "Executable SHA-256",
+            record.executable_sha256.as_deref().unwrap_or("not available"),
+        );
+        key_value(ui, "Stack", record.manifest.stack.label());
+        key_value(
+            ui,
+            "Simulated",
+            if record.simulated { "Yes — no real transport" } else { "No" },
+        );
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new(
+                "Advanced providers are outside the Windows in-box stack. A provider must be installed and supported by its publisher; Bluu does not download or bundle it.",
+            )
+            .size(10.8)
+            .color(theme::muted()),
+        );
+    });
+    let _ = ctx;
 }

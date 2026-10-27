@@ -190,9 +190,11 @@ bundle or install such a component.
 ## 5. Recommended architecture
 
 **A. Native Windows integration, read-only by default, with an isolateable ETW
-verification helper.** The app must remain useful when configuration is not
-available. The value is trustworthy inventory, endpoint/profile diagnostics,
-true negotiation observation, and clear “why not” explanations.
+verification helper and a validated advanced-provider boundary.** The app must
+remain useful when configuration is not available. The value is trustworthy
+inventory, endpoint/profile diagnostics, true negotiation observation, and clear
+“why not” explanations. Advanced codec preference is delegated to a provider that
+owns the encoder/transport and its legal/signing obligations.
 
 ## 6. Hardware requirements and limitations
 

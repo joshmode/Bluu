@@ -326,6 +326,10 @@ pub struct Snapshot {
     pub notes: Vec<String>,
     #[serde(default)]
     pub platform: Option<WindowsPlatformInfo>,
+    #[serde(default)]
+    pub providers: Vec<crate::provider::ProviderRecord>,
+    #[serde(default)]
+    pub provider_preferences: Vec<crate::provider::ProviderPreference>,
 }
 
 impl Snapshot {
@@ -341,6 +345,8 @@ impl Snapshot {
             warnings: Vec::new(),
             notes: Vec::new(),
             platform: None,
+            providers: Vec::new(),
+            provider_preferences: Vec::new(),
         }
     }
 
@@ -405,4 +411,25 @@ pub struct CaptureOutcome {
     pub captured_events: u32,
     pub session_started: bool,
     pub note: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProviderOperationRequest {
+    pub provider_id: String,
+    pub operation: crate::provider::ProviderAction,
+    pub device_id: Option<String>,
+    pub preference: Option<crate::provider::ProviderPreference>,
+    pub rollback_token: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProviderOperationOutcome {
+    pub provider_id: String,
+    pub operation: crate::provider::ProviderAction,
+    pub accepted: bool,
+    pub message: String,
+    pub requires_reconnect: bool,
+    pub rollback_token: Option<String>,
+    pub observation: Option<ActiveCodecObservation>,
+    pub applied_preference: Option<crate::provider::ProviderPreference>,
 }

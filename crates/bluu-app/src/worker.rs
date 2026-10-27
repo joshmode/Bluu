@@ -4,7 +4,11 @@ use std::sync::{
 };
 
 use bluu_core::{
-    backend::BackendError, model::CaptureOutcome, model::CaptureRequest, model::Snapshot,
+    backend::BackendError,
+    model::{
+        CaptureOutcome, CaptureRequest, ProviderOperationOutcome, ProviderOperationRequest,
+        Snapshot,
+    },
     AudioBackend,
 };
 
@@ -12,12 +16,14 @@ use bluu_core::{
 pub enum WorkerEvent {
     Scanned(Box<Result<Snapshot, BackendError>>),
     Captured(Result<CaptureOutcome, BackendError>),
+    ProviderOperated(Box<Result<ProviderOperationOutcome, BackendError>>),
 }
 
 #[derive(Debug)]
 pub enum WorkerRequest {
     Scan,
     Capture(CaptureRequest),
+    ProviderOperation(ProviderOperationRequest),
 }
 
 pub struct Worker {
@@ -43,6 +49,11 @@ impl Worker {
                             let _ = event_tx.send(WorkerEvent::Captured(
                                 backend.capture_active_codec(&request),
                             ));
+                        }
+                        WorkerRequest::ProviderOperation(request) => {
+                            let _ = event_tx.send(WorkerEvent::ProviderOperated(Box::new(
+                                backend.provider_operation(&request),
+                            )));
                         }
                     }
                 }
@@ -71,6 +82,10 @@ impl Worker {
 
     pub fn capture(&self, request: CaptureRequest) {
         let _ = self.tx.send(WorkerRequest::Capture(request));
+    }
+
+    pub fn provider_operation(&self, request: ProviderOperationRequest) {
+        let _ = self.tx.send(WorkerRequest::ProviderOperation(request));
     }
 
     pub fn poll(&self) -> Vec<WorkerEvent> {

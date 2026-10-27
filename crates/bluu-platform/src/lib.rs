@@ -6,6 +6,7 @@
 
 pub mod demo;
 pub mod launch;
+pub mod providers;
 
 #[cfg(windows)]
 pub mod windows;
@@ -86,6 +87,15 @@ impl AudioBackend for UnsupportedBackend {
     ) -> Result<bluu_core::CaptureOutcome, bluu_core::backend::BackendError> {
         Err(bluu_core::backend::BackendError::Unsupported(
             "active codec tracing is a Windows-only feature".into(),
+        ))
+    }
+
+    fn provider_operation(
+        &mut self,
+        _request: &bluu_core::model::ProviderOperationRequest,
+    ) -> Result<bluu_core::model::ProviderOperationOutcome, bluu_core::backend::BackendError> {
+        Err(bluu_core::backend::BackendError::Unsupported(
+            "advanced codec providers are Windows-only".into(),
         ))
     }
 }

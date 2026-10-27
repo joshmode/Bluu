@@ -2,7 +2,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{CaptureOutcome, CaptureRequest, Snapshot};
+use crate::model::{
+    CaptureOutcome, CaptureRequest, ProviderOperationOutcome, ProviderOperationRequest, Snapshot,
+};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BackendDescriptor {
@@ -72,6 +74,8 @@ pub enum BackendError {
     Platform(String),
     #[error("invalid input: {0}")]
     InvalidInput(String),
+    #[error("advanced codec provider error: {0}")]
+    Provider(String),
 }
 
 impl BackendError {
@@ -95,6 +99,9 @@ impl BackendError {
             Self::Cancelled => "The operation was cancelled. No settings were changed.",
             Self::Platform(_) => "Export diagnostics and review the Windows compatibility notes.",
             Self::InvalidInput(_) => "Choose a connected Bluetooth audio device and try again.",
+            Self::Provider(_) => {
+                "Verify that the provider is installed, its manifest is trusted, and its driver/service is running."
+            }
         }
     }
 }
@@ -107,6 +114,15 @@ pub trait AudioBackend: Send {
         &mut self,
         request: &CaptureRequest,
     ) -> Result<CaptureOutcome, BackendError>;
+
+    fn provider_operation(
+        &mut self,
+        _request: &ProviderOperationRequest,
+    ) -> Result<ProviderOperationOutcome, BackendError> {
+        Err(BackendError::Unsupported(
+            "advanced codec providers are not supported by this backend".into(),
+        ))
+    }
 }
 
 impl fmt::Display for ConfigOperation {

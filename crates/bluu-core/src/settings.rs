@@ -110,6 +110,9 @@ pub enum SettingsError {
 }
 
 pub fn app_data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("BLUU_STATE_DIR") {
+        return PathBuf::from(dir);
+    }
     directories::ProjectDirs::from("io", "Bluu", "Bluu")
         .map(|d| d.data_local_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from(".bluu"))
@@ -117,6 +120,14 @@ pub fn app_data_dir() -> PathBuf {
 
 pub fn settings_path() -> PathBuf {
     app_data_dir().join("settings.json")
+}
+
+pub fn provider_dir() -> PathBuf {
+    app_data_dir().join("providers")
+}
+
+pub fn provider_state_path() -> PathBuf {
+    app_data_dir().join("provider-state.json")
 }
 
 pub fn log_dir() -> PathBuf {

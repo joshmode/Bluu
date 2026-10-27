@@ -12,6 +12,7 @@
 | tracing / tracing-subscriber | 0.1.44 / 0.3.23 | Structured local logs | MIT | No network/telemetry |
 | directories | 6.0.0 | App data paths | MIT OR Apache-2.0 | Cross-platform data dir handling |
 | image | 0.25.x | Headless screenshot renderer | MIT OR Apache-2.0 | Docs/CI only |
+| rfd | 0.15.4 | Native provider-folder picker (Windows) | MIT | Explicit local install only; no network |
 | thiserror | 2.0.21 | Explicit error types | MIT OR Apache-2.0 | Clear backend errors |
 
 No dynamic browser engine, analytics SDK, cloud SDK, or codec binary is a dependency.

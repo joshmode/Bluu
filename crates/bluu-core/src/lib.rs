@@ -11,6 +11,7 @@ pub mod diagnostics;
 pub mod feasibility;
 pub mod model;
 pub mod privacy;
+pub mod provider;
 pub mod sdp;
 pub mod settings;
 pub mod verify;
@@ -20,6 +21,11 @@ pub use backend::{
 };
 pub use codec::{CodecId, CodecState, Confidence, Evidence, VerificationMethod};
 pub use model::*;
+pub use provider::{
+    ProviderAction, ProviderCodec, ProviderManifest, ProviderOutcome, ProviderParameter,
+    ProviderPreference, ProviderRecord, ProviderRequest, ProviderResponse, ProviderStatus,
+    ProviderValidationError,
+};
 pub use verify::Verifier;
 
 pub const APP_NAME: &str = "Bluu";

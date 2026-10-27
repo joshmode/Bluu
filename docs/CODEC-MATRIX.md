@@ -24,10 +24,10 @@ headsets we have tested. The machine-readable source is
 | SBC | Natively supported | Documented | High | Required by A2DP, in-box |
 | AAC | Natively supported | Documented | High | Win11 21H2+ table |
 | aptX Classic | Natively supported | Documented | High | Win10/11 table |
-| aptX HD | Requires substantial system integration | Documented | High | Not in-box |
+| aptX HD | Conditionally implementable | Documented | High | Not in-box; provider/driver required |
 | aptX Adaptive | Conditionally implementable | Documented + inferred vendor IDs | High | Qualcomm/OEM radio path |
-| aptX Lossless | Not feasible safe/supported | Inferred | Medium | Only vendor path |
-| LDAC | Requires substantial system integration | Documented + vendor licence | High | Not in-box; Sony licence |
+| aptX Lossless | Conditionally implementable | Inferred | Medium | Provider/vendor path only |
+| LDAC | Conditionally implementable | Documented + vendor licence | High | Not in-box; provider + Sony licence |
 | LC3 | Requires substantial system integration | Documented | High | Separate LE Audio/VSAP |
 | MP3 | Not feasible on this backend | Inferred | Medium | Standard ID, no in-box table |
 
@@ -38,6 +38,8 @@ headsets we have tested. The machine-readable source is
 | Remote A2DP service | Sometimes | Cached SDP | Does not list AVDTP codecs |
 | Local Windows in-box inventory | Yes (version table) | Documented | Not per-radio proof |
 | Active A2DP codec ID | Often | ETW `A2dpStreaming` event | Undocumented payload; needs elevation |
+| Provider preference | Yes, when installed | Provider API | Preference ≠ active codec |
+| Provider-attested active codec | Provider-dependent | Provider verify action | Not independent verification |
 | A2DP parameters (bitrate/bitpool) | No stable API | — | Replacement stack or protocol capture only |
 | Endpoint sample rate/format | Yes | Core Audio | Not the codec rate |
 | HFP active/capture endpoint | Yes | Core Audio | Does not prove codec negotiation |
@@ -46,6 +48,8 @@ headsets we have tested. The machine-readable source is
 ## “Enabling” reality
 
 - Registry edits are **not** a supported registration mechanism and are not used.
+- Advanced preference/registration is supported through the provider API. The
+  provider owns the encoder/A2DP transport; Bluu validates and invokes it.
 - A codec decoder or encoder library does not create an A2DP encoder path.
 - An external dongle/vendor stack is a legitimate way to get advanced codecs, but it
   is outside the in-box Bluetooth stack.
