@@ -100,11 +100,12 @@ TEST(IpcServer, SetCodec_WhenNotConnected_RepliesWithCodecAck) {
 
     // Build SetCodec message
     owb::ipc::MsgHeader hdr{ owb::ipc::MsgType::SetCodec,
-                              sizeof(owb::ipc::SetCodecPayload) };
+                              static_cast<uint16_t>(sizeof(owb::ipc::SetCodecPayload)) };
     owb::ipc::SetCodecPayload payload{};
     strncpy_s(payload.codec_name, sizeof(payload.codec_name), "LDAC",   _TRUNCATE);
     strncpy_s(payload.param_key,  sizeof(payload.param_key),  "switch", _TRUNCATE);
     payload.param_value = 1;
+    payload.magic = BLUU_CODEC_CONFIG_MAGIC;
 
     DWORD written = 0;
     WriteFile(pipe, &hdr,     sizeof(hdr),     &written, nullptr);
@@ -195,6 +196,7 @@ public:
         strncpy_s(payload.codec_name, sizeof(payload.codec_name), codec, _TRUNCATE);
         strncpy_s(payload.param_key,  sizeof(payload.param_key),  key,   _TRUNCATE);
         payload.param_value = value;
+        payload.magic = BLUU_CODEC_CONFIG_MAGIC;
         const owb::ipc::MsgHeader hdr{ owb::ipc::MsgType::SetCodec,
                                        static_cast<uint16_t>(sizeof(payload)) };
         if (!write(&hdr, sizeof(hdr)) || !write(&payload, sizeof(payload))) return -1;

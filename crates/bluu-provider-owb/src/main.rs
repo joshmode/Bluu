@@ -26,6 +26,8 @@ const MSG_GET_STATUS: u16 = 0x0010;
 const MSG_STATUS_REPLY: u16 = 0x0011;
 const MSG_SET_CODEC: u16 = 0x0020;
 const MSG_CODEC_ACK: u16 = 0x0021;
+const CODEC_CONFIG_MAGIC: u32 = 0x3155_4C42; // "BLU1"
+const SET_CODEC_PAYLOAD_LEN: usize = 48;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -291,12 +293,13 @@ fn set_codec(pipe: &mut Pipe, codec: u32) -> Result<(), String> {
 }
 
 fn set_param(pipe: &mut Pipe, codec: u32, key: &str, value: i64) -> Result<(), String> {
-    let mut payload = [0u8; 40];
+    let mut payload = [0u8; SET_CODEC_PAYLOAD_LEN];
     let name = codec_name(codec);
     payload[..16].copy_from_slice(&name.as_bytes()[..name.len().min(15)]);
     let key = key.as_bytes();
     payload[16..16 + key.len().min(15)].copy_from_slice(&key[..key.len().min(15)]);
     payload[32..40].copy_from_slice(&value.to_le_bytes());
+    payload[40..44].copy_from_slice(&CODEC_CONFIG_MAGIC.to_le_bytes());
     pipe.write_message(MSG_SET_CODEC, &payload)?;
     let (kind, response) = pipe.read_message()?;
     if kind != MSG_CODEC_ACK || response.len() < 4 {
@@ -550,5 +553,15 @@ mod tests {
         );
         assert_eq!(codec_from_name("aptX-HD"), Some(CODEC_APTX_HD));
         assert_eq!(codec_name(rollback_codec(Some("codec:aptX-HD"))), "aptX-HD");
+    }
+
+    #[test]
+    fn ipc_payload_layout_is_versioned_and_zeroed() {
+        assert_eq!(SET_CODEC_PAYLOAD_LEN, 48);
+        assert_eq!(CODEC_CONFIG_MAGIC, 0x3155_4C42);
+        let mut payload = [0u8; SET_CODEC_PAYLOAD_LEN];
+        payload[40..44].copy_from_slice(&CODEC_CONFIG_MAGIC.to_le_bytes());
+        assert_eq!(&payload[40..44], b"BLU1");
+        assert_eq!(&payload[44..48], &[0u8; 4]);
     }
 }

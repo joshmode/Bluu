@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
 use bluu_core::{
     codec::{CodecId, CodecReport},
@@ -35,6 +36,8 @@ pub struct BluuApp {
     pub show_privacy: bool,
     pub last_saved: Option<String>,
     pub first_scan_sent: bool,
+    pub first_scan_started: Option<Instant>,
+    pub first_scan_completed_ms: Option<u128>,
     pub selected_provider: Option<String>,
     pub provider_order: Vec<CodecId>,
     pub provider_parameters: std::collections::BTreeMap<String, String>,
@@ -54,6 +57,7 @@ impl BluuApp {
         settings_path: PathBuf,
         demo: bool,
     ) -> Self {
+        let startup_started = Instant::now();
         theme::configure(&cc.egui_ctx, settings.theme);
         let last_selected_device = settings.last_selected_device.clone();
         Self {
@@ -74,6 +78,8 @@ impl BluuApp {
             show_privacy: false,
             last_saved: None,
             first_scan_sent: false,
+            first_scan_started: Some(startup_started),
+            first_scan_completed_ms: None,
             selected_provider: None,
             provider_order: Vec::new(),
             provider_parameters: Default::default(),
@@ -396,6 +402,9 @@ impl BluuApp {
     pub fn scan(&mut self) {
         self.scanning = true;
         self.scan_error = None;
+        if self.first_scan_started.is_none() {
+            self.first_scan_started = Some(Instant::now());
+        }
         self.worker.scan();
     }
 
@@ -483,6 +492,14 @@ impl BluuApp {
                 WorkerEvent::Scanned(boxed) => match *boxed {
                     Ok(snapshot) => {
                         self.worker.scan_finished();
+                        if self.first_scan_completed_ms.is_none() {
+                            if let Some(started) = self.first_scan_started {
+                                self.first_scan_completed_ms = Some(started.elapsed().as_millis());
+                                if let Some(elapsed_ms) = self.first_scan_completed_ms {
+                                    tracing::info!(elapsed_ms, "first backend scan completed");
+                                }
+                            }
+                        }
                         self.scanning = false;
                         let keep = self
                             .selected_device

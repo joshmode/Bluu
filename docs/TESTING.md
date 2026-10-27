@@ -27,7 +27,8 @@ Results:
 - Provider-contract integration tests: 4 passed (apply/verify/rollback round-trip,
   missing-executable rejection, malformed-executable failure, contained
   install/uninstall).
-- Native provider adapter tests: 6 passed.
+- Native provider adapter tests: 7 passed, including the versioned 48-byte
+  SetCodec payload layout.
 - Native AVDTP/packet/receive-queue host tests: 50 passed (SEP discovery, codec
   capability matching, SET_CONFIGURATION bytes, LDAC frequency codes, per-codec
   RTP/payload framing, transactions, fragmentation, abort, timeout/backoff, and

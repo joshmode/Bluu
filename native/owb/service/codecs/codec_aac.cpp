@@ -178,6 +178,20 @@ void CodecAac::start_mf_encoder() {
     if (!init_mf_encoder()) impl_.reset();
 }
 
+void CodecAac::restart_with(int freq, int bitrate, bool& ready) {
+    const int previous_freq = freq_;
+    const int previous_bitrate = bitrate_;
+    freq_ = freq;
+    bitrate_ = bitrate;
+    start_mf_encoder();
+    ready = impl_ != nullptr;
+    if (!ready) {
+        freq_ = previous_freq;
+        bitrate_ = previous_bitrate;
+        start_mf_encoder();
+    }
+}
+
 bool CodecAac::init_mf_encoder() {
     if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) return false;
     impl_->mf_started = true;
@@ -221,25 +235,15 @@ std::ptrdiff_t CodecAac::encode(std::span<const int16_t> input,
 bool CodecAac::set_param(CodecParam p) {
     if (p.key == "freq") {
         if (p.value != 44100 && p.value != 48000) return false;
-        const int previous = freq_;
-        freq_ = static_cast<int>(p.value);
-        start_mf_encoder();
-        if (!impl_) {
-            freq_ = previous;
-            start_mf_encoder();
-        }
-        return impl_ != nullptr;
+        bool ready = false;
+        restart_with(static_cast<int>(p.value), bitrate_, ready);
+        return ready;
     }
     if (p.key == "bitrate") {
         if (!(64_000..=320_000).contains(&p.value)) return false;
-        const int previous = bitrate_;
-        bitrate_ = static_cast<int>(p.value);
-        start_mf_encoder();
-        if (!impl_) {
-            bitrate_ = previous;
-            start_mf_encoder();
-        }
-        return impl_ != nullptr;
+        bool ready = false;
+        restart_with(freq_, static_cast<int>(p.value), ready);
+        return ready;
     }
     return false;
 }

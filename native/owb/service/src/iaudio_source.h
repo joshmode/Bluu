@@ -24,7 +24,8 @@ public:
     // Sample rate in Hz (valid after start()).
     virtual int sample_rate() const noexcept = 0;
 
-    // Number of channels (1 = mono, 2 = stereo).
+    // Number of interleaved channels in read() output. The pipeline downmixes
+    // to stereo; sources may return more than two channels (for example 5.1).
     virtual int channels()    const noexcept = 0;
 };
 

@@ -188,6 +188,7 @@ TEST(AvdtpState, CommandFailureProducesAbortBeforeTeardown) {
     EXPECT_TRUE(machine.action.HasCommand);
     EXPECT_EQ(machine.action.SignalId, OWB_AVDTP_MSG_ABORT);
     EXPECT_EQ(machine.action.PayloadLen, 1u);
+    EXPECT_TRUE(machine.action.CloseMedia);
     EXPECT_TRUE(machine.action.CloseChannels);
     EXPECT_TRUE(machine.action.Reconnect);
 }
@@ -278,6 +279,7 @@ TEST(AvdtpState, RemoteAbortIsAcknowledgedAndTornDown) {
     EXPECT_EQ(machine.receive(abort), OwbAvdtpResultCommand);
     EXPECT_EQ(machine.action.MessageType, OWB_AVDTP_MSG_ACCEPT);
     EXPECT_EQ(machine.action.SignalId, OWB_AVDTP_MSG_ABORT);
+    EXPECT_TRUE(machine.action.CloseMedia);
     EXPECT_TRUE(machine.action.CloseChannels);
     EXPECT_EQ(machine.context.State, OwbAvdtpStateIdle);
 }

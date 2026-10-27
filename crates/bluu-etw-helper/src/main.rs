@@ -50,8 +50,8 @@ fn main() {
             error: Some(error_text(&e)),
         },
     };
-    if let Ok(json) = serde_json::to_vec(&output) {
-        let _ = std::fs::write(&invocation.result_path, json);
+    if !write_result_exclusive(&invocation.result_path, &output) {
+        std::process::exit(1);
     }
 }
 
@@ -96,9 +96,28 @@ fn run_aac_helper(args: &[String]) {
             error: Some(error_text(&e)),
         },
     };
-    if let Ok(json) = serde_json::to_vec(&output) {
-        let _ = std::fs::write(&invocation.result_path, json);
+    if !write_result_exclusive(&invocation.result_path, &output) {
+        std::process::exit(1);
     }
+}
+
+#[cfg(windows)]
+fn write_result_exclusive<T: serde::Serialize>(path: &std::path::Path, value: &T) -> bool {
+    let Ok(json) = serde_json::to_vec(value) else {
+        return false;
+    };
+    // The unelevated caller picks a fresh path. Create it exclusively rather
+    // than following an existing file/reparse point created after the UAC
+    // prompt. A collision is a hard failure, not an overwrite.
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    else {
+        return false;
+    };
+    use std::io::Write;
+    file.write_all(&json).is_ok()
 }
 
 #[cfg(windows)]

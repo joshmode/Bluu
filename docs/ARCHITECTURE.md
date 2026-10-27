@@ -132,7 +132,7 @@ The helper runs elevated. Risks include:
 |---|---|
 | Fake/renamed helper binary | Locate only `bluu-etw-helper.exe` next to the trusted app; installer integrity checks |
 | Arbitrary trace session interference | Fixed provider GUID, fixed session name, bounded duration, stop on exit |
-| Malicious result path | App-generated path only; release helper should validate the path is under the user's temp directory |
+| Malicious result path | App-generated temp path; helper validates the prefix and creates the file with `create_new`, rejecting an existing file/reparse point |
 | Trace payload sensitive data | Bluu reads only codec IDs; no packet payload logging |
 | UAC fatigue | One-time action, explicit copy, no background elevation |
 

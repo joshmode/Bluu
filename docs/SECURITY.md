@@ -45,7 +45,8 @@ ask users to disable Secure Boot.
 | Malicious device sends hostile SDP | Parser recursion/overflow | Bounds checks, max depth 16, no panics on truncation; tests |
 | Device name spoofing | Misassociation | Name fallback is Low confidence and labelled; container ID preferred |
 | Fake app files/helper | Elevation of untrusted binary | Code signing/installer SHA-256; helper must sit next to app; verify release artifacts |
-| Result file parsing | Memory/logic abuse | Small serde struct; size limits recommended |
+| Elevated result-file race | Overwrite/symlink abuse | Helper creates its JSON result with `create_new`; existing paths fail closed |
+| Result file parsing | Memory/logic abuse | Small serde struct with 64 KiB ETW / 16 KiB AAC limits |
 | Trace provider spoofing | False codec observation | Provider GUID fixed; evidence is unverified without independent trace |
 | Diagnostics leak identifiers | Privacy | Redacted by default; explicit opt-in |
 | Log injection | Log confusion | Structured tracing, no terminal control sequence execution |

@@ -20,6 +20,7 @@ constexpr size_t kMaxLogBytes = 2u * 1024u * 1024u;
 std::mutex  g_mutex;
 FILE*       g_file = nullptr;
 bool        g_file_logging = true;
+bool        g_console_logging = false;
 
 const char* level_tag(Level level) {
     switch (level) {
@@ -94,6 +95,11 @@ void set_file_logging(bool enabled) {
     }
 }
 
+void set_console_logging(bool enabled) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_console_logging = enabled;
+}
+
 void shutdown() {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_file) {
@@ -117,12 +123,15 @@ void write(Level level, const char* fmt, ...) {
               level_tag(level), GetCurrentThreadId(), msg);
 
     std::lock_guard<std::mutex> lock(g_mutex);
+    // The service runs from a GUI subsystem binary. Avoid writing every line to
+    // stdout/stderr when SCM started it without a console; OutputDebugString and
+    // the rotated file are the supported diagnostics paths.
     if (g_file) {
         fputs(line, g_file);
         fflush(g_file);
     }
     OutputDebugStringA(line);
-    fputs(line, stdout);
+    if (g_console_logging) fputs(line, stdout);
 }
 
 } // namespace owb::log

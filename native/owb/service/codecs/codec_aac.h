@@ -27,6 +27,7 @@ public:
 private:
     void start_mf_encoder();
     bool init_mf_encoder();
+    void restart_with(int freq, int bitrate, bool& ready);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

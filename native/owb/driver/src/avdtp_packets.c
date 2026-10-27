@@ -80,6 +80,8 @@ static const codec_config_t kCodecConfigs[] = {
 
 // Media framing policy, exposed for host tests and shared with the driver.
 // aptX and aptX HD are carried in RTP packets without a payload header.
+// One aptX frame contains four stereo sample pairs, so its RTP timestamp
+// advances by four samples per media packet.
 // SBC/LDAC use RTP plus a one-byte frame-count header.
 void owb_avdtp_media_framing(unsigned long codec_id, int* use_rtp,
                              int* payload_header, unsigned long* timestamp_increment) {
@@ -91,7 +93,7 @@ void owb_avdtp_media_framing(unsigned long codec_id, int* use_rtp,
         case OWB_CODEC_APTXHD:
             rtp = 1;
             header = 0;
-            increment = 128u;
+            increment = 4u;
             break;
         case OWB_CODEC_AAC:
             rtp = 1;

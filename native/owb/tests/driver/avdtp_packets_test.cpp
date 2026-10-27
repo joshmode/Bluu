@@ -233,7 +233,7 @@ TEST(AvdtpFraming, AptxUsesRtpWithoutCodecPayloadHeader) {
         owb_avdtp_media_framing(codec, &rtp, &header, &increment);
         EXPECT_EQ(rtp, 1) << "codec " << codec;
         EXPECT_EQ(header, 0) << "codec " << codec;
-        EXPECT_EQ(increment, 128u) << "codec " << codec;
+        EXPECT_EQ(increment, 4u) << "codec " << codec;
     }
 }
 

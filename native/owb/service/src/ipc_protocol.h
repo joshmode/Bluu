@@ -19,6 +19,11 @@ enum class MsgType : uint16_t {
     Error       = 0x00FF,   // payload: ErrorPayload
 };
 
+// Version prefix for SetCodecPayload. The provider adapter sends "BLU1" in the
+// reserved padding so the service can reject the legacy 40-byte layout rather
+// than interpreting its padding as request flags.
+#define BLUU_CODEC_CONFIG_MAGIC 0x31554C42u  // "BLU1" little-endian
+
 // ─── Header (precedes every message) ─────────────────────────────────────────
 #pragma pack(push, 1)
 struct MsgHeader {
@@ -41,8 +46,10 @@ struct SetCodecPayload {
     char    codec_name[16];  // "SBC", "LDAC", "aptX", ...
     char    param_key[16];   // e.g. "bitpool"
     int64_t param_value;     // e.g. 53
+    uint32_t magic;          // BLUU_CODEC_CONFIG_MAGIC
+    uint32_t flags;          // reserved; must be zero
 };
-static_assert(sizeof(SetCodecPayload) == 40);
+static_assert(sizeof(SetCodecPayload) == 48);
 
 struct AckPayload {
     uint8_t success;         // 1 = OK, 0 = rejected

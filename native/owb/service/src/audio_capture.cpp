@@ -87,9 +87,13 @@ bool AudioCapture::start() {
 
     impl_->sample_rate_ = static_cast<int>(impl_->mix_format->nSamplesPerSec);
     impl_->channels_    = static_cast<int>(impl_->mix_format->nChannels);
+    // The loopback mix can be multichannel (for example 5.1). The pipeline
+    // downmixes the first two channels to stereo. Require a complete 32-bit
+    // IEEE-float frame so every packet can be converted without truncation.
     if (impl_->mix_format->wFormatTag != WAVE_FORMAT_IEEE_FLOAT ||
         impl_->mix_format->wBitsPerSample != 32 ||
-        impl_->channels_ <= 0) {
+        impl_->channels_ <= 0 ||
+        impl_->mix_format->nBlockAlign != impl_->mix_format->nChannels * 4u) {
         OWB_LOG_ERROR("Unsupported WASAPI mix format tag=%u bits=%u channels=%u",
                       impl_->mix_format->wFormatTag,
                       impl_->mix_format->wBitsPerSample,
@@ -166,17 +170,14 @@ std::ptrdiff_t AudioCapture::read(std::span<int16_t> buffer) {
     impl_->get_buffer_logged_ = false;
 
     const auto   ch            = static_cast<size_t>(impl_->channels_);
-    if (ch == 0 || ch > 64) {
+    if (ch == 0) {
         impl_->capture->ReleaseBuffer(frames_avail);
         return -1;
     }
-    // Never truncate a packet: the streaming pipeline expects complete stereo
-    // frames. The caller's buffer is sized for the capture period; if WASAPI
-    // returns more, discard it and let the next read resynchronise.
+    // The caller's buffer is sized for the capture period. If WASAPI returns
+    // more, skip this packet and let the next read resynchronise.
     if (frames_avail > buffer.size() / ch) {
         impl_->capture->ReleaseBuffer(frames_avail);
-        // An oversize packet is a recoverable capture hiccup: skip this packet
-        // and let the next read resynchronise instead of ending capture.
         return 0;
     }
 

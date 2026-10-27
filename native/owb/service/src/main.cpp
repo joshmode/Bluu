@@ -13,6 +13,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <thread>
 
 #define WIN32_LEAN_AND_MEAN
@@ -38,6 +39,21 @@ SERVICE_STATUS        g_status{};
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 
 void on_signal(int) { g_running = false; }
+
+// Service mode has no console. A pipe or console write can therefore block or
+// fail and is never a reliable status channel. Keep stdout for --console only.
+void configure_logging(bool console_mode) {
+    if (!console_mode) {
+#if defined(_MSC_VER)
+        FILE* stream = nullptr;
+        freopen_s(&stream, "NUL", "w", stdout);
+#else
+        (void)std::freopen("/dev/null", "w", stdout);
+#endif
+    }
+    owb::log::set_file_logging(true);
+    owb::log::set_console_logging(console_mode);
+}
 
 // The actual service body: build components, run the pipeline, block until stop.
 int run_service() {
@@ -165,6 +181,7 @@ void WINAPI service_main(DWORD, LPWSTR*) {
 }
 
 int run_console() {
+    configure_logging(true);
     std::signal(SIGINT,  on_signal);
     std::signal(SIGTERM, on_signal);
     std::puts("[OK]  Console mode. Press Ctrl+C to stop.");
@@ -178,6 +195,7 @@ int wmain(int argc, wchar_t** argv) {
 
     if (argc > 1 && (::wcscmp(argv[1], L"--console") == 0 ||
                      ::wcscmp(argv[1], L"-c") == 0)) {
+        configure_logging(true);
         OWB_LOG_INFO("Running in console mode");
         int rc = run_console();
         owb::log::shutdown();
@@ -185,6 +203,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     OWB_LOG_INFO("Running as Windows Service");
+    configure_logging(false);
     SERVICE_TABLE_ENTRYW table[] = {
         { const_cast<LPWSTR>(kServiceName), service_main },
         { nullptr, nullptr },

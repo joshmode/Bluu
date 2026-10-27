@@ -16,6 +16,10 @@ must never be enabled silently.
 - A Bluu provider adapter (`bluu-provider-owb`) that lets the normal provider UI
   select a codec and parameters through the local named pipe.
 
+The provider/service IPC `SetCodecPayload` is versioned with the `BLU1` magic in
+its reserved field. A legacy 40-byte payload is rejected rather than interpreted
+with uninitialized flag state.
+
 It does **not** implement aptX Adaptive, aptX Lossless, or LC3/LE Audio. Those
 entries are rejected rather than mapped to a different codec.
 

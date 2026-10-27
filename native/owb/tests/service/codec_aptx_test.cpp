@@ -26,7 +26,7 @@ TEST(CodecAptx, EncodeProducesOutput) {
     auto pcm = make_pcm_aptx(4);  // 4 stereo frames = minimum for aptX
     std::vector<uint8_t> out(16);
     auto n = codec.encode(pcm, out);
-    EXPECT_GT(n, 0);
+    EXPECT_EQ(n, 4);
 }
 
 TEST(CodecAptx, DefaultParamsAreReasonable) {
@@ -59,9 +59,10 @@ TEST(CodecAptx, RejectsUnsupportedRate) {
 
 TEST(CodecAptxHd, PreservesOutputAcrossBlocks) {
     owb::CodecAptx codec(true);
-    auto pcm = make_pcm_aptx(8);
+    auto pcm = make_pcm_aptx(4);
     std::vector<uint8_t> out(32);
-    EXPECT_EQ(codec.encode(pcm, out), 12);
+    EXPECT_EQ(codec.encode(pcm, out), 6);
+    EXPECT_EQ(codec.input_frame_samples(), 8);
 }
 
 TEST(CodecAptx, RejectsPartialInputBlock) {
@@ -69,5 +70,12 @@ TEST(CodecAptx, RejectsPartialInputBlock) {
     auto pcm = make_pcm_aptx(4);
     pcm.pop_back();
     std::vector<uint8_t> out(16);
+    EXPECT_EQ(codec.encode(pcm, out), -1);
+}
+
+TEST(CodecAptx, RejectsMultipleFramesPerPacket) {
+    owb::CodecAptx codec(false);
+    auto pcm = make_pcm_aptx(8);
+    std::vector<uint8_t> out(32);
     EXPECT_EQ(codec.encode(pcm, out), -1);
 }

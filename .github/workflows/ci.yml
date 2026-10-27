@@ -50,6 +50,30 @@ jobs:
       - run: cmake -S native/owb -B build/native-host
       - run: cmake --build build/native-host --target owb_driver_tests
       - run: build/native-host/tests/driver/owb_driver_tests
+      - name: Strict C syntax checks
+        run: |
+          clang -std=c11 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror \
+            -Inative/owb/driver/src -Inative/owb/driver -fsyntax-only \
+            native/owb/driver/src/avdtp_packets.c \
+            native/owb/driver/src/avdtp_state.c \
+            native/owb/driver/src/recv_queue.c
+
+  provider-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --workspace --target x86_64-pc-windows-msvc
+      - name: Copy native provider adapter into packaged provider directory
+        shell: pwsh
+        run: |
+          Copy-Item "target\x86_64-pc-windows-msvc\release\bluu-provider-owb.exe" "providers\bluu-native-a2dp\bluu-provider-owb.exe" -Force
+      - name: No-headset provider smoke
+        shell: pwsh
+        run: .\scripts\windows\smoke-provider.ps1
 
   windows-check:
     runs-on: windows-latest

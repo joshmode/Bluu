@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('snapshot', 'provider-smoke', 'redaction', 'aac-state')]
+    [ValidateSet('snapshot', 'provider-smoke', 'redaction', 'aac-state', 'first-scan')]
     [string] $Mode,
     [string] $BluuRoot = ''
 )
@@ -25,6 +25,24 @@ function Invoke-BluuJson {
         throw "bluu.exe $($Arguments -join ' ') failed: $($output -join [Environment]::NewLine)"
     }
     return ($output -join [Environment]::NewLine)
+}
+
+function Get-FirstScanMetric {
+    $log = Join-Path $env:LOCALAPPDATA 'Bluu\logs\bluu.log'
+    if (-not (Test-Path $log)) {
+        throw "Bluu log not found: $log"
+    }
+    $match = Get-Content $log -Tail 3000 |
+        Select-String -Pattern 'first backend scan completed' |
+        Select-Object -Last 1
+    if (-not $match) {
+        throw 'No first-scan completion record found in Bluu log'
+    }
+    [pscustomobject]@{
+        log = $log
+        line = $match.Line
+        note = 'Elapsed time is measured from app startup to the first completed backend scan.'
+    } | ConvertTo-Json -Depth 4
 }
 
 switch ($Mode) {
@@ -65,6 +83,9 @@ switch ($Mode) {
     'aac-state' {
         & (Join-Path $BluuRoot 'target\x86_64-pc-windows-msvc\release\bluu.exe') --aac-state
         if ($LASTEXITCODE -ne 0) { throw "aac-state failed with exit $LASTEXITCODE" }
+    }
+    'first-scan' {
+        Get-FirstScanMetric
     }
     'redaction' {
         $exportDir = Join-Path $env:LOCALAPPDATA 'Bluu\exports'

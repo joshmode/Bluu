@@ -189,6 +189,7 @@ Save-Command 'services-owb.txt' 'sc.exe' @('query', 'owb-service')
 
 Invoke-Probe 'snapshot.json' 'snapshot'
 Invoke-Probe 'aac-state.json' 'aac-state'
+Invoke-Probe 'first-scan.json' 'first-scan'
 Get-TraceMetadata
 Get-PerformanceEvidence
 

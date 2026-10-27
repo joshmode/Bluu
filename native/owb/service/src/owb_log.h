@@ -16,6 +16,7 @@ void write(Level level, const char* fmt, ...);
 // File logging can be disabled for privacy-sensitive recordings. Debugger and
 // console output remain available when explicitly requested.
 void set_file_logging(bool enabled);
+void set_console_logging(bool enabled);
 
 } // namespace owb::log
 

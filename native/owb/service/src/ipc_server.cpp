@@ -323,6 +323,9 @@ struct IpcServer::Impl {
 
         ipc::SetCodecPayload request{};
         std::memcpy(&request, raw.data(), sizeof(request));
+        if (request.magic != BLUU_CODEC_CONFIG_MAGIC || request.flags != 0u) {
+            return write_ack(io(), false);
+        }
         return write_ack(io(), apply_request(request));
     }
 

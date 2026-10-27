@@ -67,6 +67,7 @@ static OWB_AVDTP_RESULT enter_failure(POWB_AVDTP_CONTEXT context,
     if (context->BackoffTicks > 8u) context->BackoffTicks = 8u;
     action->Result = result;
     action->CloseChannels = 1;
+    action->CloseMedia = 1;
     action->Reconnect = 1;
     return result;
 }
@@ -289,6 +290,7 @@ static OWB_AVDTP_RESULT handle_complete_message(
             context->State = OwbAvdtpStateIdle;
             context->ActiveCodecId = OWB_CODEC_SBC;
             context->PendingCodecId = OWB_CODEC_SBC;
+            action->CloseMedia = 1;
             action->CloseChannels = 1;
             action->Reconnect = 1;
             action->Result = OwbAvdtpResultCommand;
