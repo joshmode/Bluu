@@ -13,6 +13,7 @@
 | [WINDOWS-BUILD.md](WINDOWS-BUILD.md) | Windows build and manual QA |
 | [LICENSING.md](LICENSING.md) | Licence and codec redistribution assessment |
 | [NATIVE-A2DP.md](NATIVE-A2DP.md) | Optional experimental driver/service, limits, recovery |
+| [Native installer status](../native/owb/installer/README.md) | Quarantined stale MSI and safe test/install flow |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | Dependency rationale |
 | [DECISIONS.md](DECISIONS.md) | Decision log |
 | [ADVANCED-CODEC-PROVIDER-PLAN.md](ADVANCED-CODEC-PROVIDER-PLAN.md) | Provider architecture and phased implementation |

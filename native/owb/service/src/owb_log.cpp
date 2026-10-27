@@ -19,6 +19,7 @@ constexpr size_t kMaxLogBytes = 2u * 1024u * 1024u;
 
 std::mutex  g_mutex;
 FILE*       g_file = nullptr;
+bool        g_file_logging = true;
 
 const char* level_tag(Level level) {
     switch (level) {
@@ -68,7 +69,7 @@ void init(const char* component) {
     if (g_file) return;
 
     wchar_t path[MAX_PATH]{};
-    if (build_log_path(component, path, MAX_PATH)) {
+    if (g_file_logging && build_log_path(component, path, MAX_PATH)) {
         rotate_if_needed(path);
         _wfopen_s(&g_file, path, L"a");
     }
@@ -82,6 +83,15 @@ void init(const char* component) {
               st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
     if (g_file) { fputs(header, g_file); fflush(g_file); }
     OutputDebugStringA(header);
+}
+
+void set_file_logging(bool enabled) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_file_logging = enabled;
+    if (!enabled && g_file) {
+        fclose(g_file);
+        g_file = nullptr;
+    }
 }
 
 void shutdown() {

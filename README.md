@@ -43,9 +43,9 @@ a replacement driver — not a registry tweak. See [research](docs/RESEARCH.md) 
 
 | Codec | Generic Windows 11 in-box A2DP | Set preference in Bluu |
 |---|---|---|
-| SBC | Yes | No supported API |
-| AAC | Yes (21H2+) | No supported API |
-| aptX Classic | Yes | No supported API |
+| SBC | Yes | No documented preference API |
+| AAC | Yes (21H2+) | One opt-in BthA2dp value, backed up |
+| aptX Classic | Yes | Indirectly, by disabling AAC on affected builds |
 | aptX HD | No | Native experimental provider / provider-gated |
 | aptX Adaptive | Select Qualcomm 24H2 devices | Provider-gated / OEM |
 | LDAC | No | Native experimental provider / provider-gated |
@@ -127,8 +127,9 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and
 
 On the development host (macOS, no Windows radio):
 
-- 36 core/provider/app tests and 7 platform tests pass;
-- 28 native AVDTP host tests pass;
+- 53 Rust workspace tests pass (31 core, 9 platform, 3 app, 4 provider-contract,
+  6 native-provider adapter);
+- 50 native AVDTP/packet/receive-queue host tests pass;
 - formatting and Clippy with `-D warnings` pass;
 - the Windows target type-checks;
 - the demo UI/screenshot renderer builds;

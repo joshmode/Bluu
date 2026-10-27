@@ -34,6 +34,17 @@ NTSTATUS L2capOpenSignalingChannel(_In_ POWB_DEVICE_EXTENSION DevExt);
 // Open the A2DP media L2CAP channel (called after AVDTP OPEN response).
 NTSTATUS L2capOpenMediaChannel(_In_ POWB_DEVICE_EXTENSION DevExt);
 
+L2CAP_CHANNEL_HANDLE L2capSignalingChannelHandle(_In_ POWB_DEVICE_EXTENSION DevExt);
+L2CAP_CHANNEL_HANDLE L2capMediaChannelHandle(_In_ POWB_DEVICE_EXTENSION DevExt);
+
+// Submit BRB_L2CA_CLOSE_CHANNEL for the media/signaling channels. PASSIVE_LEVEL.
+VOID L2capPrepareCloseMediaChannel(_In_ POWB_DEVICE_EXTENSION DevExt);
+VOID L2capPrepareCloseChannels(_In_ POWB_DEVICE_EXTENSION DevExt);
+
+// Clear handles without submitting BRBs. Safe in a DISPATCH_LEVEL callback.
+VOID L2capForgetChannels(_In_ POWB_DEVICE_EXTENSION DevExt);
+VOID L2capClearForReconnect(_In_ POWB_DEVICE_EXTENSION DevExt);
+
 // Send a packet on the AVDTP signaling L2CAP channel.
 NTSTATUS L2capSendSignaling(
     _In_ POWB_DEVICE_EXTENSION DevExt,

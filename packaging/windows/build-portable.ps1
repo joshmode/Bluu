@@ -53,6 +53,11 @@ try {
     $nativeProviderSha = if (Test-Path (Join-Path $Output "providers\bluu-native-a2dp\bluu-provider-owb.exe")) {
         (Get-FileHash (Join-Path $Output "providers\bluu-native-a2dp\bluu-provider-owb.exe") -Algorithm SHA256).Hash
     } else { "not included" }
+    Copy-Item (Join-Path $root "packaging\THIRD-PARTY-NOTICES.md") $Output -Force
+    Copy-Item (Join-Path $root "native\owb\third-party\LICENSES.md") (Join-Path $Output "NATIVE-THIRD-PARTY-NOTICES.md") -Force
+    if (Test-Path (Join-Path $root "native\owb\third-party\ffmpeg-aptx\COPYING.LGPL-2.1")) {
+        Copy-Item (Join-Path $root "native\owb\third-party\ffmpeg-aptx\COPYING.LGPL-2.1") $Output -Force
+    }
     @"
 Bluu portable Windows build
 Version: see Cargo.toml
@@ -72,6 +77,9 @@ portable build. The AAC toggle is an explicit in-app action with its own consent
 The optional native provider is included as an uninstalled package; installing its
 driver/service requires the separate explicit OpenWinBlue installer and administrator
 approval.
+
+Native optional-component notices: NATIVE-THIRD-PARTY-NOTICES.md
+FFmpeg aptX LGPL text: COPYING.LGPL-2.1 (when the native package is included)
 "@ | Set-Content (Join-Path $Output "BUILD-INFO.txt")
 
     Compress-Archive -Path (Join-Path $Output "*") -DestinationPath "$Output.zip" -Force

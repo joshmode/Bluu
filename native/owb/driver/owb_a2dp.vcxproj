@@ -71,23 +71,27 @@
     <ClCompile Include="src\owb_a2dp.c" />
     <ClCompile Include="src\avdtp.c" />
     <ClCompile Include="src\avdtp_packets.c" />
+    <ClCompile Include="src\avdtp_state.c" />
     <ClCompile Include="src\l2cap_stream.c" />
     <ClCompile Include="src\ioctl.c" />
+    <ClCompile Include="src\recv_queue.c" />
   </ItemGroup>
 
   <ItemGroup>
     <ClInclude Include="src\owb_a2dp.h" />
     <ClInclude Include="src\avdtp.h" />
     <ClInclude Include="src\avdtp_packets.h" />
+    <ClInclude Include="src\avdtp_state.h" />
     <ClInclude Include="src\l2cap_stream.h" />
     <ClInclude Include="src\ioctl.h" />
+    <ClInclude Include="src\recv_queue.h" />
     <ClInclude Include="owb_ioctl.h" />
     <ClInclude Include="owb_codec_ids.h" />
   </ItemGroup>
 
-  <!-- INF excluded from project build: InfVerif.dll is absent from the chocolatey WDK
-       package used in CI. The INF is deployed via the installer (Phase 4).
-       To validate the INF locally: run InfVerif.exe manually from a full WDK install. -->
+  <!-- INF is intentionally excluded from the MSBuild target. The release process
+       validates and packages it separately with a full WDK installation; the
+       guarded installer records the published oemNN.inf identity. -->
   <!--
   <ItemGroup>
     <Inf Include="owb_a2dp.inf" />

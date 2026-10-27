@@ -15,8 +15,10 @@ The script:
 
 1. builds both executables for the MSVC target;
 2. copies the app, helper, licences, README, security notes, and testing notes;
-3. writes SHA-256 hashes to `BUILD-INFO.txt`;
-4. creates a ZIP under `dist/`.
+3. includes the optional native provider package and its LGPL/Apache/GPL notices
+   when `bluu-provider-owb.exe` is built;
+4. writes SHA-256 hashes to `BUILD-INFO.txt`;
+5. creates a ZIP under `dist/`.
 
 `bluu-provider-demo.exe` is included only as a protocol fixture; it does not
 provide a Bluetooth transport. Real advanced codecs require a separately installed
@@ -36,10 +38,13 @@ registry entry is installed by this build.
 
 ## Installer status
 
-An MSI/MSIX is intentionally not generated in this foundation. If added, it must:
+The stale native MSI project is quarantined. A future MSI/MSIX must:
 
 - be signed;
 - install per-user or with a clear option;
 - not install a driver/service;
 - include a verified uninstall path;
 - preserve the standard-user UI and separate helper.
+
+The optional native component uses `native/owb/tools/install-native-a2dp.ps1`,
+which fails closed on signature problems and records prior driver/service state.

@@ -13,6 +13,10 @@ void init(const char* component);
 void shutdown();
 void write(Level level, const char* fmt, ...);
 
+// File logging can be disabled for privacy-sensitive recordings. Debugger and
+// console output remain available when explicitly requested.
+void set_file_logging(bool enabled);
+
 } // namespace owb::log
 
 #define OWB_LOG_DEBUG(...) ::owb::log::write(::owb::log::Level::Debug, __VA_ARGS__)

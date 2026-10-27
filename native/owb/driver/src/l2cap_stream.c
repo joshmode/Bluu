@@ -60,12 +60,26 @@ NTSTATUS L2capSubmitBrb(
     return status;
 }
 
-// Signaling receive callback
-// Called by BthPort at up to DISPATCH_LEVEL when signaling data arrives.
-// L2CAP indication callback — matches PFNBTHPORT_INDICATION_CALLBACK.
-// Called at DISPATCH_LEVEL by BthPort for channel events.
-// On IndicationRecvPacket: stores packet length and enqueues work item.
-// The work item (PASSIVE_LEVEL) submits a BRB_L2CA_ACL_TRANSFER IN to read the data.
+static L2CAP_CHANNEL_HANDLE signaling_handle(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    return (L2CAP_CHANNEL_HANDLE)InterlockedCompareExchangePointer(
+        (PVOID volatile*)&DevExt->SignalingChannelHandle, NULL, NULL);
+}
+
+static L2CAP_CHANNEL_HANDLE media_handle(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    return (L2CAP_CHANNEL_HANDLE)InterlockedCompareExchangePointer(
+        (PVOID volatile*)&DevExt->MediaChannelHandle, NULL, NULL);
+}
+
+L2CAP_CHANNEL_HANDLE L2capSignalingChannelHandle(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    return signaling_handle(DevExt);
+}
+
+L2CAP_CHANNEL_HANDLE L2capMediaChannelHandle(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    return media_handle(DevExt);
+}
+
+// Signaling receive callback. Called at up to DISPATCH_LEVEL; only spinlock-safe
+// queueing is done here. All BRB work happens in the PASSIVE work item.
 _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID L2capSignalingIndicationCallback(
     _In_opt_ PVOID                  Context,
@@ -77,28 +91,31 @@ VOID L2capSignalingIndicationCallback(
 
     switch (Indication) {
         case IndicationRecvPacket:
-            // Store pending length; the work item will read the data via BRB IN.
-            // Indications can arrive during teardown; refuse to enqueue work
-            // once the signaling channel is gone.
-            if (devExt->SignalingChannelHandle == 0 || !devExt->AvdtpWorkItem) {
+            if (signaling_handle(devExt) == NULL || !devExt->AvdtpWorkItem ||
+                InterlockedCompareExchange(&devExt->ClosingChannels, 0, 0) != 0) {
                 OwbLog("L2CAP ind: RecvPacket ignored (channel/device closing)");
                 break;
             }
-            devExt->PendingRecvLen = Parameters->Parameters.RecvPacket.PacketLength;
-            if (devExt->PendingRecvLen == 0) break;
-            OwbLog("L2CAP ind: RecvPacket %lu bytes -> encolando work item",
-                   devExt->PendingRecvLen);
-            WdfWorkItemEnqueue(devExt->AvdtpWorkItem);
+            const ULONG length = Parameters->Parameters.RecvPacket.PacketLength;
+            if (length == 0) break;
+            WdfSpinLockAcquire(devExt->RecvLock);
+            if (!OwbRecvQueuePush(&devExt->RecvQueue, length)) {
+                InterlockedExchange(&devExt->ProtocolFault, 1);
+                OwbLog("L2CAP ind: receive queue overflow");
+            }
+            const BOOLEAN queued = OwbRecvQueueCount(&devExt->RecvQueue) != 0u;
+            WdfSpinLockRelease(devExt->RecvLock);
+            if (queued) WdfWorkItemEnqueue(devExt->AvdtpWorkItem);
             break;
 
         case IndicationRemoteDisconnect:
-            // Remote side closed the channel. Limpiar AMBOS handles y el RTP:
-            // el timer de reconexión reabrirá y renegociará desde cero.
-            devExt->SignalingChannelHandle = 0;
-            devExt->MediaChannelHandle     = 0;
+            // Do not submit BRBs at DISPATCH_LEVEL. Forget the handles now and
+            // let the PASSIVE reconnect worker renegotiate from scratch.
+            L2capForgetChannels(devExt);
             devExt->RtpSeqNum              = 0;
             devExt->RtpTimestamp           = 0;
-            devExt->Avdtp.State = AvdtpStateIdle;
+            AvdtpHandlePeerDisconnected(devExt);
+            WdfWorkItemEnqueue(devExt->ReconnectWorkItem);
             OwbLog("L2CAP ind: canal de signaling DESCONECTADO por remoto");
             break;
 
@@ -141,8 +158,9 @@ NTSTATUS L2capOpenSignalingChannel(_In_ POWB_DEVICE_EXTENSION DevExt)
 
     NTSTATUS status = L2capSubmitBrb(DevExt, (PBRB)brb, sizeof(*brb));
     if (NT_SUCCESS(status)) {
-        DevExt->SignalingChannelHandle = brb->ChannelHandle;
-        DevExt->Avdtp.State = AvdtpStateConnecting;
+        InterlockedExchangePointer((PVOID volatile*)&DevExt->SignalingChannelHandle,
+                                   brb->ChannelHandle);
+        DevExt->Avdtp.State = OwbAvdtpStateConnecting;
         OwbLog("OpenSignaling: canal abierto handle=0x%p", (PVOID)brb->ChannelHandle);
         status = AvdtpConnect(DevExt);
     } else {
@@ -185,7 +203,8 @@ NTSTATUS L2capOpenMediaChannel(_In_ POWB_DEVICE_EXTENSION DevExt)
 
     NTSTATUS status = L2capSubmitBrb(DevExt, (PBRB)brb, sizeof(*brb));
     if (NT_SUCCESS(status)) {
-        DevExt->MediaChannelHandle = brb->ChannelHandle;
+        InterlockedExchangePointer((PVOID volatile*)&DevExt->MediaChannelHandle,
+                                   brb->ChannelHandle);
         OwbLog("OpenMedia: canal abierto handle=0x%p", (PVOID)brb->ChannelHandle);
     } else {
         OwbLog("OpenMedia: BRB_L2CA_OPEN_CHANNEL fallo 0x%x", status);
@@ -193,6 +212,58 @@ NTSTATUS L2capOpenMediaChannel(_In_ POWB_DEVICE_EXTENSION DevExt)
 
     DevExt->BthInterface.BthFreeBrb((PBRB)brb);
     return status;
+}
+
+static void close_l2cap_channel(_In_ POWB_DEVICE_EXTENSION DevExt,
+                                _Inout_ L2CAP_CHANNEL_HANDLE* Handle,
+                                ULONG Tag) {
+    L2CAP_CHANNEL_HANDLE channel =
+        (L2CAP_CHANNEL_HANDLE)InterlockedExchangePointer((PVOID volatile*)Handle, NULL);
+    if (channel == NULL) return;
+
+    struct _BRB_L2CA_CLOSE_CHANNEL* brb =
+        (struct _BRB_L2CA_CLOSE_CHANNEL*)
+        DevExt->BthInterface.BthAllocateBrb(BRB_L2CA_CLOSE_CHANNEL, Tag);
+    if (brb) {
+        brb->BtAddress = DevExt->RemoteBtAddress;
+        brb->ChannelHandle = channel;
+        const NTSTATUS status =
+            L2capSubmitBrb(DevExt, (PBRB)brb, sizeof(*brb));
+        if (!NT_SUCCESS(status))
+            OwbLog("L2CAP close channel failed 0x%x", status);
+        DevExt->BthInterface.BthFreeBrb((PBRB)brb);
+    } else {
+        OwbLog("L2CAP close channel allocation failed");
+    }
+}
+
+VOID L2capPrepareCloseMediaChannel(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    if (!DevExt->BthInterface.BthAllocateBrb) return;
+    close_l2cap_channel(DevExt, &DevExt->MediaChannelHandle, 'OWCM');
+}
+
+VOID L2capPrepareCloseChannels(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    if (!DevExt->BthInterface.BthAllocateBrb) return;
+    InterlockedExchange(&DevExt->ClosingChannels, 1);
+    WdfSpinLockAcquire(DevExt->RecvLock);
+    OwbRecvQueueClear(&DevExt->RecvQueue);
+    WdfSpinLockRelease(DevExt->RecvLock);
+    close_l2cap_channel(DevExt, &DevExt->MediaChannelHandle, 'OWCM');
+    close_l2cap_channel(DevExt, &DevExt->SignalingChannelHandle, 'OWCS');
+    InterlockedExchange(&DevExt->ClosingChannels, 0);
+}
+
+VOID L2capForgetChannels(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    InterlockedExchangePointer((PVOID volatile*)&DevExt->MediaChannelHandle, NULL);
+    InterlockedExchangePointer((PVOID volatile*)&DevExt->SignalingChannelHandle, NULL);
+    InterlockedExchange(&DevExt->ClosingChannels, 1);
+    WdfSpinLockAcquire(DevExt->RecvLock);
+    OwbRecvQueueClear(&DevExt->RecvQueue);
+    WdfSpinLockRelease(DevExt->RecvLock);
+}
+
+VOID L2capClearForReconnect(_In_ POWB_DEVICE_EXTENSION DevExt) {
+    InterlockedExchange(&DevExt->ClosingChannels, 0);
 }
 
 // L2CAP signaling send
@@ -205,7 +276,8 @@ NTSTATUS L2capSendSignaling(
         OwbLog("SendSignaling: sin interfaz BthPort");
         return STATUS_DEVICE_NOT_READY;
     }
-    if (DevExt->SignalingChannelHandle == 0) {
+    const L2CAP_CHANNEL_HANDLE channel = signaling_handle(DevExt);
+    if (channel == NULL) {
         OwbLog("SendSignaling: canal de signaling cerrado");
         return STATUS_DEVICE_NOT_CONNECTED;
     }
@@ -216,7 +288,7 @@ NTSTATUS L2capSendSignaling(
     if (!brb) return STATUS_INSUFFICIENT_RESOURCES;
 
     brb->BtAddress     = DevExt->RemoteBtAddress;
-    brb->ChannelHandle = DevExt->SignalingChannelHandle;
+    brb->ChannelHandle = channel;
     brb->TransferFlags = ACL_TRANSFER_DIRECTION_OUT | ACL_SHORT_TRANSFER_OK;
     brb->BufferSize    = Length;
     brb->Buffer        = (PVOID)Data;
@@ -237,7 +309,7 @@ NTSTATUS L2capSendMediaFrame(
     _In_reads_bytes_(FrameLen) const UCHAR* FrameData,
     _In_ USHORT FrameLen)
 {
-    if (DevExt->Avdtp.State != AvdtpStateStreaming) {
+    if (DevExt->Avdtp.State != OwbAvdtpStateStreaming) {
         DevExt->MediaNotStreamingCount++;
         if ((DevExt->MediaNotStreamingCount % 1000u) == 1u) {
             OwbLog("SendMedia: descartado #%lu - estado=%s (no Streaming)",
@@ -249,6 +321,8 @@ NTSTATUS L2capSendMediaFrame(
         OwbLog("SendMedia: sin interfaz BthPort");
         return STATUS_DEVICE_NOT_READY;
     }
+    const L2CAP_CHANNEL_HANDLE channel = media_handle(DevExt);
+    if (channel == NULL) return STATUS_DEVICE_NOT_CONNECTED;
 
     int use_rtp = 1, payload_hdr = 1;
     ULONG   ts_incr = 128u;
@@ -286,7 +360,7 @@ NTSTATUS L2capSendMediaFrame(
     }
 
     brb->BtAddress     = DevExt->RemoteBtAddress;
-    brb->ChannelHandle = DevExt->MediaChannelHandle;
+    brb->ChannelHandle = channel;
     brb->TransferFlags = ACL_TRANSFER_DIRECTION_OUT | ACL_SHORT_TRANSFER_OK;
     brb->BufferSize    = pkt_len;
     brb->Buffer        = pkt;

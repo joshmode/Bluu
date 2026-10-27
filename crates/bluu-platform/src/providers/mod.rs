@@ -152,6 +152,112 @@ pub fn default_parameters(
         .unwrap_or_default()
 }
 
+/// Validate a packaged provider without installing, elevating, or contacting the
+/// native service. This is suitable for CI and no-headset Windows smoke tests.
+pub fn smoke_provider(record: &ProviderRecord) -> Result<String, BackendError> {
+    if !record.is_usable() {
+        return Err(BackendError::Provider(format!(
+            "provider '{}' is not usable: {}",
+            record.manifest.id,
+            record.issues.join("; ")
+        )));
+    }
+    let directory = Path::new(&record.directory)
+        .canonicalize()
+        .map_err(|e| BackendError::Provider(format!("provider directory: {e}")))?;
+    let executable = directory
+        .join(&record.manifest.executable)
+        .canonicalize()
+        .map_err(|e| BackendError::Provider(format!("provider executable: {e}")))?;
+    if !executable.starts_with(&directory) || !executable.is_file() {
+        return Err(BackendError::Provider(
+            "provider executable is outside its package or is not a file".into(),
+        ));
+    }
+    let actual_hash = discover::file_hash(&executable)
+        .map_err(|e| BackendError::Provider(format!("provider hash: {e}")))?;
+    if let Some(expected) = &record.executable_sha256 {
+        if !actual_hash.eq_ignore_ascii_case(expected) {
+            return Err(BackendError::Provider(
+                "provider executable changed after discovery".into(),
+            ));
+        }
+    }
+
+    use std::io::{Read, Seek, SeekFrom};
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    // Use a file rather than a pipe so a provider that emits excessive output
+    // cannot fill a pipe and block before the timeout can terminate it.
+    let mut output_file = tempfile::Builder::new()
+        .prefix("bluu-provider-manifest-")
+        .tempfile()
+        .map_err(|e| BackendError::Provider(format!("provider manifest temp file: {e}")))?;
+    let child_stdout = output_file
+        .reopen()
+        .map_err(|e| BackendError::Provider(format!("provider manifest output file: {e}")))?;
+    let mut child = Command::new(&executable)
+        .arg("--manifest")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(child_stdout))
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| BackendError::Provider(format!("provider --manifest start: {e}")))?;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(status)) => {
+                return Err(BackendError::Provider(format!(
+                    "provider --manifest exited with {status}"
+                )));
+            }
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(BackendError::Provider(
+                    "provider --manifest timed out".into(),
+                ));
+            }
+            Err(e) => return Err(BackendError::Provider(format!("provider wait: {e}"))),
+        }
+    }
+    output_file
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| BackendError::Provider(format!("provider manifest rewind: {e}")))?;
+    let mut stdout = String::new();
+    output_file
+        .take(bluu_core::provider::MAX_MANIFEST_BYTES + 1)
+        .read_to_string(&mut stdout)
+        .map_err(|e| BackendError::Provider(format!("provider manifest output: {e}")))?;
+    if stdout.len() as u64 > bluu_core::provider::MAX_MANIFEST_BYTES {
+        return Err(BackendError::Provider(
+            "provider manifest output exceeded 64 KiB".into(),
+        ));
+    }
+    let embedded: bluu_core::ProviderManifest = serde_json::from_str(&stdout)
+        .map_err(|e| BackendError::Provider(format!("provider manifest JSON: {e}")))?;
+    bluu_core::provider::validate_manifest(&embedded)
+        .map_err(|e| BackendError::Provider(e.to_string()))?;
+    if embedded.id != record.manifest.id
+        || embedded.version != record.manifest.version
+        || embedded.executable != record.manifest.executable
+        || embedded.codecs.len() != record.manifest.codecs.len()
+    {
+        return Err(BackendError::Provider(
+            "embedded provider manifest does not match the packaged manifest".into(),
+        ));
+    }
+    Ok(format!(
+        "provider={} version={} sha256={}",
+        record.manifest.id, record.manifest.version, actual_hash
+    ))
+}
+
 /// Explicit filesystem installation only. Bluu never downloads or silently
 /// installs a provider/driver.
 pub fn install_local_provider(source: &Path) -> Result<ProviderRecord, BackendError> {

@@ -19,15 +19,19 @@ build/native-host/tests/driver/owb_driver_tests
 
 Results:
 
-- Core tests: 29 passed (codec IDs, provider contracts, evidence rules, SDP
+- Core tests: 31 passed (codec IDs, provider contracts, evidence rules, SDP
   bounds/fixtures, feasibility, privacy redaction, settings, verification).
-- Platform tests: 7 passed (screenshot invariants, helper argument/path validation,
-  provider discovery/traversal rejection).
-- Provider integration tests: 4 passed (apply/verify/rollback round-trip,
+- Platform tests: 9 passed (screenshot invariants, helper argument/path validation,
+  provider discovery/traversal rejection, demo provider regression).
+- App tests: 3 passed.
+- Provider-contract integration tests: 4 passed (apply/verify/rollback round-trip,
   missing-executable rejection, malformed-executable failure, contained
   install/uninstall).
-- Native AVDTP host tests: 28 passed (SEP discovery, codec capability matching,
-  SET_CONFIGURATION bytes, LDAC frequency codes, per-codec RTP/payload framing).
+- Native provider adapter tests: 6 passed.
+- Native AVDTP/packet/receive-queue host tests: 50 passed (SEP discovery, codec
+  capability matching, SET_CONFIGURATION bytes, LDAC frequency codes, per-codec
+  RTP/payload framing, transactions, fragmentation, abort, timeout/backoff, and
+  bounded receive queueing).
 - Native aptX core: compiled and executed on the host with an independent
   block-level smoke harness (not a substitute for Windows service tests).
 - Platform screenshot test: passed.
@@ -48,6 +52,10 @@ label.
 | HW-04 | Windows 11 24H2 | Qualcomm radio | aptX Adaptive headphones | A2DP, HFP | TBD | TBD | Vendor + ETW | Pending |
 | HW-05 | Windows 11 24H2 | LE Audio-capable | LE Audio earbuds | LE Audio | PACS/BAP | Not via A2DP | Driver tools | Pending |
 | HW-06 | Windows 11 24H2 | Sony-compatible dongle/stack | LDAC headphones | A2DP | TBD | TBD | External analyzer | Pending |
+
+Use `scripts/windows/hardware-validation.ps1` to collect the evidence bundle for each
+row. Use `scripts/windows/smoke-provider.ps1` for the no-headset provider checks.
+The bundle is local; never mark a row verified from Bluu's selected-codec label.
 
 ## Real-device checklist
 
@@ -74,7 +82,10 @@ Measure on real Windows hardware:
 - working set after first scan;
 - capture helper peak CPU during 30 s.
 
-No performance numbers are claimed in this repository yet.
+`scripts/windows/hardware-validation.ps1` records a demo-mode cold-start proxy,
+working set, and idle CPU sample under `performance.json`. These are not native
+service or Bluetooth transmission benchmarks; repeat the measurement with the
+native service and a real headset before making release claims.
 
 ## Failure injection
 

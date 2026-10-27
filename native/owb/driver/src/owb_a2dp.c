@@ -30,51 +30,59 @@ static BTH_ADDR OwbParseBtAddrHex(_In_ PCWSTR Str)
     return addr & 0x0000FFFFFFFFFFFFull;
 }
 
-// PASSIVE_LEVEL worker: reads pending AVDTP signaling data via BRB and processes it.
-// Enqueued by L2capSignalingIndicationCallback at DISPATCH_LEVEL when
-// IndicationRecvPacket fires with PendingRecvLen set.
+// PASSIVE_LEVEL worker: drains queued AVDTP signaling data via BRB.
+// Indications only enqueue lengths at DISPATCH_LEVEL; all BRB work is here.
 VOID OwbAvdtpWorkCallback(_In_ WDFWORKITEM WorkItem)
 {
     WDFDEVICE device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
     POWB_DEVICE_EXTENSION ext = OwbGetDeviceExtension(device);
 
-    if (!ext->BthInterface.BthAllocateBrb || ext->PendingRecvLen == 0) {
-        OwbLog("AvdtpWork: nada que leer (iface=%d pending=%lu)",
-               ext->BthInterface.BthAllocateBrb != NULL, ext->PendingRecvLen);
-        return;
+    InterlockedExchange(&ext->WorkItemQueued, 0);
+    if (!ext->BthInterface.BthAllocateBrb) return;
+
+    for (;;) {
+        unsigned long pending = 0;
+        WdfSpinLockAcquire(ext->RecvLock);
+        const BOOLEAN have = OwbRecvQueuePop(&ext->RecvQueue, &pending) != 0;
+        WdfSpinLockRelease(ext->RecvLock);
+        if (!have) break;
+
+        const L2CAP_CHANNEL_HANDLE channel =
+            L2capSignalingChannelHandle(ext);
+        if (channel == NULL) {
+            OwbLog("AvdtpWork: signaling channel closed; dropping queued read");
+            break;
+        }
+
+        const ULONG readLen = min(pending, (ULONG)sizeof(ext->AvdtpWorkBuf));
+        struct _BRB_L2CA_ACL_TRANSFER* brb =
+            (struct _BRB_L2CA_ACL_TRANSFER*)
+            ext->BthInterface.BthAllocateBrb(BRB_L2CA_ACL_TRANSFER, 'OWBR');
+        if (!brb) {
+            OwbLog("AvdtpWork: BthAllocateBrb failed (out of memory)");
+            break;
+        }
+
+        brb->BtAddress     = ext->RemoteBtAddress;
+        brb->ChannelHandle = channel;
+        brb->TransferFlags = ACL_TRANSFER_DIRECTION_IN | ACL_SHORT_TRANSFER_OK;
+        brb->BufferSize    = readLen;
+        brb->Buffer        = ext->AvdtpWorkBuf;
+        brb->BufferMDL     = NULL;
+
+        const NTSTATUS status = L2capSubmitBrb(ext, (PBRB)brb, sizeof(*brb));
+        if (NT_SUCCESS(status) && brb->BufferSize > 0) {
+            ext->AvdtpWorkLen = (USHORT)brb->BufferSize;
+            AvdtpHandleSignalingPacket(ext, ext->AvdtpWorkBuf, ext->AvdtpWorkLen);
+            ext->AvdtpWorkLen = 0;
+        } else {
+            OwbLog("AvdtpWork: BRB IN failed 0x%x (size=%lu)",
+                   status, brb->BufferSize);
+            ext->BthInterface.BthFreeBrb((PBRB)brb);
+            break;
+        }
+        ext->BthInterface.BthFreeBrb((PBRB)brb);
     }
-
-    const ULONG readLen = min(ext->PendingRecvLen, (ULONG)sizeof(ext->AvdtpWorkBuf));
-    OwbLog("AvdtpWork: leyendo %lu bytes del canal de signaling", readLen);
-    ext->PendingRecvLen = 0;
-
-    // Submit BRB_L2CA_ACL_TRANSFER IN to read the pending packet from BthPort.
-    struct _BRB_L2CA_ACL_TRANSFER* brb =
-        (struct _BRB_L2CA_ACL_TRANSFER*)
-        ext->BthInterface.BthAllocateBrb(BRB_L2CA_ACL_TRANSFER, 'OWBR');
-    if (!brb) {
-        OwbLog("AvdtpWork: BthAllocateBrb fallo (sin memoria)");
-        return;
-    }
-
-    brb->BtAddress     = ext->RemoteBtAddress;
-    brb->ChannelHandle = ext->SignalingChannelHandle;
-    brb->TransferFlags = ACL_TRANSFER_DIRECTION_IN | ACL_SHORT_TRANSFER_OK;
-    brb->BufferSize    = readLen;
-    brb->Buffer        = ext->AvdtpWorkBuf;
-    brb->BufferMDL     = NULL;
-
-    NTSTATUS status = L2capSubmitBrb(ext, (PBRB)brb, sizeof(*brb));
-    if (NT_SUCCESS(status) && brb->BufferSize > 0) {
-        OwbLog("AvdtpWork: recibidos %lu bytes, procesando AVDTP", brb->BufferSize);
-        ext->AvdtpWorkLen = (USHORT)brb->BufferSize;
-        AvdtpHandleSignalingPacket(ext, ext->AvdtpWorkBuf, ext->AvdtpWorkLen);
-        ext->AvdtpWorkLen = 0;
-    } else {
-        OwbLog("AvdtpWork: BRB IN fallo 0x%x (size=%lu)", status, brb->BufferSize);
-    }
-
-    ext->BthInterface.BthFreeBrb((PBRB)brb);
 }
 
 // Período del timer de reconexión.
@@ -86,8 +94,26 @@ static BOOLEAN OwbShouldReconnect(_In_ POWB_DEVICE_EXTENSION ext)
 {
     return ext->BthInterface.BthAllocateBrb != NULL &&
            ext->RemoteBtAddress != 0 &&
-           ext->SignalingChannelHandle == 0 &&
-           ext->Avdtp.State == AvdtpStateIdle;
+           L2capSignalingChannelHandle(ext) == NULL &&
+           OwbAvdtpStateCanReconnect(&ext->Avdtp) &&
+           ext->ProtocolFault == 0;
+}
+
+VOID OwbEvtDeviceD0Exit(_In_ WDFDEVICE Device, _In_ WDF_POWER_DEVICE_STATE TargetState) {
+    UNREFERENCED_PARAMETER(TargetState);
+    POWB_DEVICE_EXTENSION ext = OwbGetDeviceExtension(Device);
+    // WdfTimerStop(TRUE) waits for the timer callback and is not valid in a
+    // power callback at elevated IRQL. Stop without waiting; parenting the timer
+    // to the device guarantees it cannot outlive this extension.
+    WdfTimerStop(ext->ReconnectTimer, FALSE);
+    L2capPrepareCloseChannels(ext);
+    ext->Avdtp.State = OwbAvdtpStateIdle;
+    ext->Avdtp.ResponsePending = 0;
+}
+
+VOID OwbEvtDeviceSelfManagedIoCleanup(_In_ WDFDEVICE Device) {
+    POWB_DEVICE_EXTENSION ext = OwbGetDeviceExtension(Device);
+    L2capPrepareCloseChannels(ext);
 }
 
 // DISPATCH_LEVEL: el callback del timer solo mira el estado y, si toca reconectar,
@@ -96,8 +122,7 @@ VOID OwbReconnectTimer(_In_ WDFTIMER Timer)
 {
     WDFDEVICE device = (WDFDEVICE)WdfTimerGetParentObject(Timer);
     POWB_DEVICE_EXTENSION ext = OwbGetDeviceExtension(device);
-    if (OwbShouldReconnect(ext))
-        WdfWorkItemEnqueue(ext->ReconnectWorkItem);
+    WdfWorkItemEnqueue(ext->ReconnectWorkItem);
 }
 
 // PASSIVE_LEVEL: reintenta abrir el canal de señalización (usa BRBs).
@@ -105,7 +130,9 @@ VOID OwbReconnectWorkCallback(_In_ WDFWORKITEM WorkItem)
 {
     WDFDEVICE device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
     POWB_DEVICE_EXTENSION ext = OwbGetDeviceExtension(device);
-    if (!OwbShouldReconnect(ext)) return;   // pudo cambiar entre encolar y correr
+    AvdtpHandleTick(ext);
+    L2capClearForReconnect(ext);
+    if (!OwbShouldReconnect(ext)) return;
 
     OwbLog("Reconnect: AVDTP Idle -> reintentando abrir signaling");
     (VOID)L2capOpenSignalingChannel(ext);
@@ -148,6 +175,11 @@ OwbEvtDeviceAdd(
     OwbLog("EvtDeviceAdd: inicio");
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, OWB_DEVICE_EXTENSION);
+    WDF_PNPPOWER_EVENT_CALLBACKS pnpCallbacks;
+    WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpCallbacks);
+    pnpCallbacks.EvtDeviceD0Exit = OwbEvtDeviceD0Exit;
+    pnpCallbacks.EvtDeviceSelfManagedIoCleanup = OwbEvtDeviceSelfManagedIoCleanup;
+    WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpCallbacks);
 
     // Seguridad del device: la deja PnP por defecto (SYSTEM full; el servicio
     // corre como LocalSystem y abre \\.\OpenWinBlue sin problema). NO se usa
@@ -165,6 +197,7 @@ OwbEvtDeviceAdd(
     RtlZeroMemory(ext, sizeof(*ext));
     ext->Device      = device;
     ext->BthIoTarget = WdfDeviceGetIoTarget(device);
+    ext->SampleRateHz = 44100u;
     AvdtpContextInit(&ext->Avdtp);
 
     // BT address remota vía DEVPKEY_Bluetooth_DeviceAddress (string hex).
@@ -251,6 +284,16 @@ OwbEvtDeviceAdd(
     }
 
     // Work item de reconexión (PASSIVE) que abre el canal de señalización.
+    WDF_OBJECT_ATTRIBUTES spinAttribs;
+    WDF_OBJECT_ATTRIBUTES_INIT(&spinAttribs);
+    spinAttribs.ParentObject = device;
+    status = WdfSpinLockCreate(&spinAttribs, &ext->RecvLock);
+    if (!NT_SUCCESS(status)) {
+        OwbLog("EvtDeviceAdd: WdfSpinLockCreate (RecvLock) fallo 0x%x", status);
+        return status;
+    }
+    OwbRecvQueueInit(&ext->RecvQueue);
+
     WDF_WORKITEM_CONFIG reconnCfg;
     WDF_WORKITEM_CONFIG_INIT(&reconnCfg, OwbReconnectWorkCallback);
     WDF_OBJECT_ATTRIBUTES reconnAttribs;

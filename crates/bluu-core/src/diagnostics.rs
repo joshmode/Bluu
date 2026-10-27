@@ -157,7 +157,7 @@ fn codec_report(
         (
             CodecState::ProviderAvailable,
             format!(
-                "{} is advertised by an installed advanced codec provider. Hardware and remote capability are verified when the provider applies the preference.",
+                "{} is advertised by an installed advanced codec provider. That is provider capability, not proof of local or remote hardware support; a preference application does not by itself verify transmission.",
                 codec.label()
             ),
             vec![

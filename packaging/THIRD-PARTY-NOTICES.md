@@ -25,6 +25,8 @@ reviewed tool such as `cargo-about` or `cargo-deny`. Known direct dependencies:
 - libsbc, BlueZ SBC library — LGPL-2.1-or-later.
 - FFmpeg aptX codec core (`aptx.c`, `aptxenc.c` codec tables/DSP) — LGPL-2.1-or-later.
   Only the self-contained codec core is vendored; the FFmpeg framework is not.
+  The LGPL-2.1 text is included at
+  `native/owb/third-party/ffmpeg-aptx/COPYING.LGPL-2.1`.
 - GoogleTest v1.14.0 via CMake FetchContent — BSD-3-Clause, host tests only.
 
 `libopenaptx` is not included. Its README carries non-OSI restrictions beyond its GPL

@@ -107,6 +107,15 @@ TEST(CodecAac, RejectsUnsupportedRateAndBitrate) {
     EXPECT_EQ(codec.get_param("bitrate"), 256000);
 }
 
+TEST(CodecAac, FailedEncoderReinitRestoresPreviousParameters) {
+    owb::CodecAac codec;
+    const bool was_ready = codec.encoder_ready();
+    EXPECT_FALSE(codec.set_param({"bitrate", 999999}));
+    EXPECT_EQ(codec.get_param("freq"), 44100);
+    EXPECT_EQ(codec.get_param("bitrate"), 256000);
+    EXPECT_EQ(codec.encoder_ready(), was_ready);
+}
+
 TEST(CodecAac, EncodeDoesNotCrash) {
     owb::CodecAac codec;
     // 1024 stereo samples = one AAC frame

@@ -75,6 +75,8 @@ impl AudioBackend for UnsupportedBackend {
     fn scan(&mut self) -> Result<bluu_core::Snapshot, bluu_core::backend::BackendError> {
         let mut snapshot = bluu_core::Snapshot::empty(native_system_info());
         snapshot.backend = self.descriptor();
+        snapshot.providers = providers::discover();
+        snapshot.provider_preferences = providers::load_preferences();
         snapshot
             .warnings
             .push("Native Bluetooth discovery is implemented for Windows 10/11. This build is running on a non-Windows host; use demo mode to inspect the interface.".into());

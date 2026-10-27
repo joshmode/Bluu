@@ -22,6 +22,13 @@ fn main() {
     }
 
     let demo = args.iter().any(|a| a == "--demo");
+    let snapshot_json = args.iter().any(|a| a == "--snapshot-json");
+    let provider_smoke = args.iter().any(|a| a == "--provider-smoke");
+    let aac_state = args.iter().any(|a| a == "--aac-state");
+    if snapshot_json || provider_smoke || aac_state {
+        run_headless(snapshot_json, provider_smoke, aac_state, demo);
+        return;
+    }
     let settings_path = bluu_core::settings::settings_path();
     let settings =
         bluu_core::settings::Settings::load_or_default(&settings_path).unwrap_or_else(|e| {
@@ -60,6 +67,81 @@ fn main() {
     if let Err(e) = result {
         tracing::error!(%e, "window failed");
         eprintln!("Bluu could not start its window: {e}");
+    }
+}
+
+fn run_headless(snapshot_json: bool, provider_smoke: bool, aac_state: bool, demo: bool) {
+    let mut backend = bluu_platform::make_backend(demo);
+    let snapshot = match backend.scan() {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            eprintln!("scan failed: {error}");
+            std::process::exit(1);
+        }
+    };
+    if snapshot_json {
+        match serde_json::to_string_pretty(&snapshot) {
+            Ok(json) => println!("{json}"),
+            Err(error) => {
+                eprintln!("snapshot JSON failed: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    if aac_state {
+        match serde_json::to_string_pretty(&snapshot.inbox_codec) {
+            Ok(json) => println!("{json}"),
+            Err(error) => {
+                eprintln!("inbox codec state JSON failed: {error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    if provider_smoke && demo {
+        let provider = snapshot.providers.iter().find(|p| p.is_usable()).cloned();
+        let Some(provider) = provider else {
+            eprintln!("no usable demo provider found");
+            std::process::exit(2);
+        };
+        let device = snapshot.devices.iter().find(|d| d.connected).map(|d| {
+            bluu_core::provider::ProviderDevice {
+                id: d.id.clone(),
+                name: d.name.clone(),
+                address: d.address.clone(),
+                connected: d.connected,
+            }
+        });
+        let request = bluu_core::model::ProviderOperationRequest {
+            provider_id: provider.manifest.id.clone(),
+            device_id: device.as_ref().map(|d| d.id.clone()),
+            operation: bluu_core::ProviderAction::Describe,
+            preference: None,
+            rollback_token: None,
+        };
+        match backend.provider_operation(&request) {
+            Ok(response) => println!(
+                "provider={} ok={} message={}",
+                provider.manifest.id, response.accepted, response.message
+            ),
+            Err(error) => {
+                eprintln!("provider smoke failed: {error}");
+                std::process::exit(1);
+            }
+        }
+    } else if provider_smoke {
+        let providers = bluu_platform::providers::discover();
+        let provider = providers.iter().find(|p| p.is_usable()).cloned();
+        let Some(provider) = provider else {
+            eprintln!("no usable provider found");
+            std::process::exit(2);
+        };
+        match bluu_platform::providers::smoke_provider(&provider) {
+            Ok(summary) => println!("{summary}"),
+            Err(error) => {
+                eprintln!("provider smoke failed: {error}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 

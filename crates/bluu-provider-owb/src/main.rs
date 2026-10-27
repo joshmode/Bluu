@@ -85,6 +85,10 @@ fn run(request: ProviderRequest) -> Result<ProviderResponse, String> {
         }
         ProviderAction::Apply => {
             let preference = request.preference.ok_or("apply requires a preference")?;
+            let previous = get_status(&mut pipe)
+                .ok()
+                .and_then(|status| status.codec)
+                .unwrap_or(CODEC_SBC);
             apply(&mut pipe, &preference)?;
             let status = get_status(&mut pipe).ok();
             Ok(ProviderResponse {
@@ -97,14 +101,18 @@ fn run(request: ProviderRequest) -> Result<ProviderResponse, String> {
                 active_vendor_codec_id: None,
                 verified: false,
                 verification_method: None,
-                rollback_token: Some("sbc".into()),
+                rollback_token: Some(format!("codec:{}", codec_name(previous))),
                 applied_preference: Some(preference),
                 requires_reconnect: status.map(|s| !s.streaming).unwrap_or(true),
             })
         }
         ProviderAction::Verify => {
             let status = get_status(&mut pipe)?;
-            let codec = status.codec.map(codec_from_wire);
+            let codec = status
+                .streaming
+                .then_some(status.codec)
+                .flatten()
+                .map(codec_from_wire);
             Ok(ProviderResponse {
                 api_version: PROVIDER_API_VERSION,
                 ok: true,
@@ -128,12 +136,15 @@ fn run(request: ProviderRequest) -> Result<ProviderResponse, String> {
             })
         }
         ProviderAction::Rollback => {
-            set_codec(&mut pipe, CODEC_SBC)?;
+            let codec = rollback_codec(request.rollback_token.as_deref());
+            set_codec(&mut pipe, codec)?;
             Ok(ProviderResponse {
                 api_version: PROVIDER_API_VERSION,
                 ok: true,
-                message: "Native service switched back to SBC; reconnect to complete rollback."
-                    .into(),
+                message: format!(
+                    "Native service switched back to {}; reconnect to complete rollback.",
+                    codec_name(codec)
+                ),
                 error: None,
                 active_codec: None,
                 active_vendor_id: None,
@@ -154,12 +165,36 @@ fn apply(pipe: &mut Pipe, preference: &ProviderPreference) -> Result<(), String>
         .first()
         .ok_or("no codec selected")?;
     let wire = wire_from_codec(*codec)?;
+    let previous = get_status(pipe).ok().and_then(|status| status.codec);
     set_codec(pipe, wire)?;
     for (key, value) in &preference.parameters {
         let (wire_key, wire_value) = parameter(*codec, key, value)?;
-        set_param(pipe, wire, &wire_key, wire_value)?;
+        if let Err(error) = set_param(pipe, wire, &wire_key, wire_value) {
+            if let Some(previous) = previous {
+                let _ = set_codec(pipe, previous);
+            }
+            return Err(error);
+        }
     }
     Ok(())
+}
+
+fn codec_from_name(name: &str) -> Option<u32> {
+    match name {
+        "SBC" => Some(CODEC_SBC),
+        "LDAC" => Some(CODEC_LDAC),
+        "aptX" => Some(CODEC_APTX),
+        "aptX-HD" => Some(CODEC_APTX_HD),
+        "AAC" => Some(CODEC_AAC),
+        _ => None,
+    }
+}
+
+fn rollback_codec(token: Option<&str>) -> u32 {
+    token
+        .and_then(|token| token.strip_prefix("codec:"))
+        .and_then(codec_from_name)
+        .unwrap_or(CODEC_SBC)
 }
 
 fn parameter(codec: CodecId, key: &str, value: &str) -> Result<(String, i64), String> {
@@ -495,5 +530,25 @@ mod tests {
             ("freq".into(), 44_100)
         );
         assert!(parameter(CodecId::AptXHd, "ldac_frequency", "44100").is_err());
+    }
+
+    #[test]
+    fn rollback_tokens_restore_known_codecs_and_fall_back_to_sbc() {
+        assert_eq!(rollback_codec(Some("codec:LDAC")), CODEC_LDAC);
+        assert_eq!(rollback_codec(Some("codec:aptX-HD")), CODEC_APTX_HD);
+        assert_eq!(rollback_codec(Some("codec:AAC")), CODEC_AAC);
+        assert_eq!(rollback_codec(Some("codec:unknown")), CODEC_SBC);
+        assert_eq!(rollback_codec(Some("garbage")), CODEC_SBC);
+        assert_eq!(rollback_codec(None), CODEC_SBC);
+    }
+
+    #[test]
+    fn rollback_token_encodes_previous_codec() {
+        assert_eq!(
+            format!("codec:{}", codec_name(CODEC_APTX_HD)),
+            "codec:aptX-HD"
+        );
+        assert_eq!(codec_from_name("aptX-HD"), Some(CODEC_APTX_HD));
+        assert_eq!(codec_name(rollback_codec(Some("codec:aptX-HD"))), "aptX-HD");
     }
 }

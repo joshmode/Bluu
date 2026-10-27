@@ -171,7 +171,8 @@ external solution, but it is not “unlocking” the in-box stack.
 ### A. Native Windows integration (chosen)
 
 Use WinRT/Core Audio for read-only inventory and a short ETW helper for observation.
-Pros: standard-user UI, no driver, no service, low maintenance, clear failure modes.
+Pros: standard-user UI, no driver or service in the base path, low maintenance,
+clear failure modes.
 The one narrow AAC/aptX Classic value is opt-in and reversible. Cons: it cannot
 register advanced codecs; those remain unavailable on generic hardware.
 

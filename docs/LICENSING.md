@@ -56,5 +56,9 @@ Release artifacts must include:
 - the upstream OpenWinBlue attribution and GPLv3 text;
 - the FFmpeg aptX, libsbc, and libldac notices.
 
+The vendored FFmpeg aptX core includes the full LGPL-2.1 text at
+`native/owb/third-party/ffmpeg-aptx/COPYING.LGPL-2.1`; libsbc retains its upstream
+`COPYING.LIB`, and libldac retains its upstream `LICENSE` and `NOTICE`.
+
 `packaging/THIRD-PARTY-NOTICES.md` is the release checklist; generate the final file
 from `Cargo.lock` at release time.

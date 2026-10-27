@@ -122,18 +122,28 @@ std::ptrdiff_t CodecSbc::encode(std::span<const int16_t> input,
 
 bool CodecSbc::set_param(CodecParam p) {
     if (p.key == "bitpool") {
+        if (p.value < 2 || p.value > 53) return false;
+        const uint8_t previous = cfg_->bitpool;
         cfg_->bitpool = static_cast<uint8_t>(p.value);
         // bitpool-only changes are picked up by sbc_encode without reinit
         sbc_->bitpool = cfg_->bitpool;
+        if (sbc_get_frame_length(sbc_.get()) <= 0) {
+            cfg_->bitpool = previous;
+            sbc_->bitpool = previous;
+            return false;
+        }
         return true;
     }
     if (p.key == "freq") {
+        if (p.value != 16000 && p.value != 32000 &&
+            p.value != 44100 && p.value != 48000) return false;
         cfg_->frequency = freq_to_sbc(p.value);
         sbc_reinit(sbc_.get(), 0);
         apply_config();
         return true;
     }
     if (p.key == "mode") {
+        if (p.value < SBC_MODE_MONO || p.value > SBC_MODE_JOINT_STEREO) return false;
         cfg_->mode = static_cast<uint8_t>(p.value);
         sbc_reinit(sbc_.get(), 0);
         apply_config();

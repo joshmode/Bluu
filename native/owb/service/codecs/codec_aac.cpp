@@ -221,14 +221,24 @@ std::ptrdiff_t CodecAac::encode(std::span<const int16_t> input,
 bool CodecAac::set_param(CodecParam p) {
     if (p.key == "freq") {
         if (p.value != 44100 && p.value != 48000) return false;
+        const int previous = freq_;
         freq_ = static_cast<int>(p.value);
         start_mf_encoder();
+        if (!impl_) {
+            freq_ = previous;
+            start_mf_encoder();
+        }
         return impl_ != nullptr;
     }
     if (p.key == "bitrate") {
         if (!(64_000..=320_000).contains(&p.value)) return false;
+        const int previous = bitrate_;
         bitrate_ = static_cast<int>(p.value);
         start_mf_encoder();
+        if (!impl_) {
+            bitrate_ = previous;
+            start_mf_encoder();
+        }
         return impl_ != nullptr;
     }
     return false;

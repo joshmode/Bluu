@@ -5,9 +5,13 @@ ms.date: 11/14/2024
 ms.topic: concept-article
 ---
 
-# Bluetooth Classic audio
+# Bluetooth Classic audio (upstream Microsoft reference)
 
-This article describes the Bluetooth Classic audio functionality in Windows. For information about Bluetooth LE audio, see [Bluetooth Low Energy (LE) Audio](./bluetooth-low-energy-audio.md).
+> **Upstream reference copy.** This file is retained as research evidence. Relative
+> links below point into Microsoft's documentation tree and do not resolve inside
+> this repository.
+
+This article describes the Bluetooth Classic audio functionality in Windows. For information about Bluetooth LE audio, see [Bluetooth Low Energy (LE) Audio](https://learn.microsoft.com/windows-hardware/drivers/bluetooth/bluetooth-low-energy-audio).
 
 Bluetooth Classic audio supports stereo audio playback over the Advanced Audio Distribution Profile (A2DP) and mono playback and capture over the Hands-Free Profile (HFP). Windows supports various audio codecs and sampling rates depending on the version of Windows, the capabilities of the headset, and the current usage of the playback or capture capabilities of the audio device.
 
@@ -77,7 +81,7 @@ In Windows 11, the endpoints are unified between A2DP and HFP. If an audio devic
 Windows selects HFP instead of A2DP when any of the following scenarios are true:
 
 - An application opens the input (microphone) endpoint.
-- An application creates an output (playback) stream with the category set to *[Communications](../audio/audio-signal-processing-modes.md#windows-audio-stream-categories)*.
+- An application creates an output (playback) stream with the category set to *[Communications](https://learn.microsoft.com/windows-hardware/drivers/audio/audio-signal-processing-modes#windows-audio-stream-categories)*.
 
 In all other cases, audio output (playback) to the device uses A2DP.
 

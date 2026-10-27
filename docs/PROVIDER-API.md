@@ -114,6 +114,16 @@ Build it, copy its manifest/executable into a provider directory, then run:
 BLUU_PROVIDER_DIR=<dir> cargo run -p bluu-platform --bin providers-smoke
 ```
 
+For a no-headset package check that does not require elevation, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/smoke-provider.ps1
+```
+
+It verifies manifest identity, executable containment, SHA-256 consistency, and the
+`--manifest` output emitted by the provider executable. It does not contact the
+native service or claim that a codec is active.
+
 ## Native provider
 
 `providers/bluu-native-a2dp` is the optional in-repo adapter for the experimental

@@ -69,8 +69,10 @@ bool CodecLdac::set_param(CodecParam p) {
     }
     if (p.key == "freq") {
         if (p.value != 44100 && p.value != 48000) return false;
+        const int previous = freq_;
         freq_ = static_cast<int>(p.value);
         reinit();
+        if (!initialized_) freq_ = previous;
         return initialized_;
     }
     return false;

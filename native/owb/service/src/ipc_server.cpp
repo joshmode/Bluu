@@ -331,7 +331,12 @@ struct IpcServer::Impl {
         const std::string_view key    = bounded_string(request.param_key);
         const std::optional<uint32_t> codec_id = codec_id_from_name(target);
         if (!codec_id) return false;
-        if (key == kSwitchKey) return switch_codec(*codec_id, key, request.param_value);
+        if (key == kSwitchKey) {
+            return switch_codec(*codec_id, key, request.param_value);
+        }
+        // Apply parameters only to the active encoder. A parameter for another
+        // codec must not silently alter the live stream.
+        if (!controller_ || controller_->codec_id() != *codec_id) return false;
         return set_codec_param(key, normalize_param(key, request.param_value));
     }
 
@@ -339,12 +344,19 @@ struct IpcServer::Impl {
     bool switch_codec(uint32_t codec_id, std::string_view key, int64_t value) {
         if (!is_supported_codec(codec_id)) return false;
         if (!controller_ || !stream_) return false;
+        const uint32_t previous = controller_->codec_id();
         controller_->set_codec_id(codec_id);
-        return stream_->set_codec_config(codec_id, key, value);
+        if (stream_->set_codec_config(codec_id, key, value)) return true;
+        controller_->set_codec_id(previous);
+        return false;
     }
 
     bool set_codec_param(std::string_view key, int64_t value) {
-        return controller_ && controller_->set_codec_param(key, value);
+        if (!controller_ || !stream_) return false;
+        const uint32_t active = controller_->codec_id();
+        if (!controller_->set_codec_param(key, value)) return false;
+        if (stream_->set_codec_config(active, key, value)) return true;
+        return false;
     }
 
     static bool is_supported_codec(uint32_t codec_id) {

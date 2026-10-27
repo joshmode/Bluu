@@ -131,6 +131,9 @@ fn read_manifest(directory: &Path, manifest_path: &Path) -> ProviderRecord {
     if let Err(e) = validate_manifest(&manifest) {
         issues.push(e.to_string());
     }
+    // The packaged directory is relative to the caller's working directory.
+    // Canonicalize it before probing the executable; a relative path made a
+    // valid provider look missing and silently disabled the native package.
     let canonical_dir = match directory.canonicalize() {
         Ok(p) => p,
         Err(e) => {
@@ -157,7 +160,14 @@ fn read_manifest(directory: &Path, manifest_path: &Path) -> ProviderRecord {
         manifest.stack,
         bluu_core::provider::ProviderStack::Simulated
     );
-    record(manifest, directory, manifest_path, issues, hash, simulated)
+    record(
+        manifest,
+        &canonical_dir,
+        manifest_path,
+        issues,
+        hash,
+        simulated,
+    )
 }
 
 fn invalid(
@@ -371,5 +381,37 @@ mod tests {
         std::env::remove_var("BLUU_PROVIDER_DIR");
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].manifest.id, "test.dir");
+    }
+
+    #[test]
+    fn reports_canonical_directory_and_detects_hash_mismatch() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("provider.exe"), b"fixture").unwrap();
+        let manifest = serde_json::json!({
+            "api_version": 1,
+            "id": "test.hash",
+            "name": "Hash provider",
+            "version": "1",
+            "executable": "provider.exe",
+            "stack": "simulated",
+            "capabilities": {"preferred_codec": true},
+            "codecs": [{"codec": "sbc"}]
+        });
+        fs::write(
+            dir.path().join("provider.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        std::env::set_var("BLUU_PROVIDER_DIR", dir.path());
+        let mut records = discover();
+        std::env::remove_var("BLUU_PROVIDER_DIR");
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            Path::new(&records[0].directory),
+            dir.path().canonicalize().unwrap()
+        );
+        records[0].executable_sha256 = Some("0".repeat(64));
+        assert!(super::super::smoke_provider(&records[0]).is_err());
     }
 }

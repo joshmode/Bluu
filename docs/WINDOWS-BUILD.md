@@ -51,3 +51,23 @@ does not affect Bluetooth or audio and should not be presented as codec support.
 - export redacts identifiers;
 - logs contain no Bluetooth addresses in default level;
 - no network process/connection is created.
+
+## Hardware evidence
+
+After building on Windows, collect a local evidence bundle:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/hardware-validation.ps1
+```
+
+The script records OS/radio/driver/endpoint state, before/after `pnputil` output,
+provider smoke evidence, a WPR trace file when elevated, diagnostic-redaction
+checks, and a demo-mode performance proxy. It does not install a driver.
+Review the output locally; never upload a trace without checking it for device
+identifiers. Record only independently verified results in `docs/TESTING.md`.
+
+The no-headset package check is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/smoke-provider.ps1
+```

@@ -5,22 +5,23 @@ validated end-to-end with real Bluetooth devices. Hardware test reports are as w
 
 ## Before opening a pull request
 
-1. Build and run the tests that cover your change (see [README.md](README.md#build-from-source)):
+1. Build and run the tests that cover your change (see [README.md](README.md)):
    ```powershell
-   # From a Visual Studio developer prompt (vcvars64.bat)
-   cmake --preset nmake-debug
-   cmake --build build/nmake-debug
-   ctest --preset test-nmake-debug
-
-   dotnet test gui/tests/OpenWinBlue.Tests/OpenWinBlue.Tests.csproj
+   cmake --preset windows-debug
+   cmake --build build/debug
+   ctest --preset test-all
    ```
-   `MainViewModelTests` builds real services that call `pnputil` and the Bluetooth APIs.
-2. Driver changes (`driver/`) must still build with MSBuild + WDK 11, as the `build-driver`
-   job in `.github/workflows/ci.yml` does. Say in the PR whether you tested them on hardware
+   Host-only AVDTP/packet tests also run on macOS/Linux:
+   ```bash
+   cmake -S . -B build/host
+   cmake --build build/host --target owb_driver_tests
+   build/host/tests/driver/owb_driver_tests
+   ```
+2. Driver changes (`driver/`) must still build with MSBuild + WDK 11 using
+   `driver/owb_a2dp.vcxproj`. Say in the PR whether you tested them on hardware
    (headphones, Bluetooth adapter, Windows build) or only built them.
-3. Follow the coding conventions and commit format in [CLAUDE.md](CLAUDE.md):
-   `<type>: <description>` (a scope such as `fix(service):` is common), one purpose per commit.
-4. Update the README when a feature changes status; mark unfinished work as planned.
+3. Keep `<type>: <description>` commit subjects and one purpose per commit.
+4. Update the README and `docs/TESTING.md` when a feature or its validation status changes.
 
 ## Licensing
 

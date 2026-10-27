@@ -1,11 +1,11 @@
-# sign-driver.ps1 — Test-sign the OpenWinBlue driver and assemble a deployable package.
+# sign-driver.ps1 — Development/test-sign the OpenWinBlue driver and assemble a package.
 #
-# Produces, in $OutDir: owb_a2dp.sys (signed), owb_a2dp.cat (signed), owb_a2dp.inf,
-# and owb_test.cer (the public cert the installer imports into Root/TrustedPublisher).
+# Produces, in $OutDir: owb_a2dp.sys, owb_a2dp.cat, owb_a2dp.inf, and owb_test.cer.
 #
-# This is TEST signing (self-signed) — it requires the target machine to have Test
-# Signing Mode enabled. Production/attestation signing via Microsoft Partner Center
-# is a separate flow (needs a Dev Center account + secrets) and is out of scope here.
+# This is TEST signing only. It does not install the certificate, add it to a trust
+# store, enable test-signing mode, or disable Secure Boot. Those are explicit
+# administrator actions on an isolated test machine. Production/attestation
+# signing via Microsoft Partner Center is a separate flow.
 
 [CmdletBinding()]
 param(
@@ -65,7 +65,7 @@ $cert = New-SelfSignedCertificate `
 $thumb = $cert.Thumbprint
 Write-Host "Certificate thumbprint: $thumb"
 
-# 2. Export the public cert for the installer to trust.
+# 2. Export the public cert for explicit review on an isolated test machine.
 Export-Certificate -Cert $cert -FilePath (Join-Path $OutDir 'owb_test.cer') | Out-Null
 
 # 3. Generate the security catalog from the INF (best-effort; needs WDK inf2cat).
@@ -89,3 +89,4 @@ foreach ($t in $targets) {
 }
 
 Write-Host "Test-signed driver package ready in: $OutDir"
+Write-Host "The certificate was exported but NOT installed. See installer/README.md."

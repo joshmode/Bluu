@@ -43,6 +43,9 @@ std::ptrdiff_t CodecAptx::encode(std::span<const int16_t> input,
 
     const size_t min_samples = kSamplesPerBlock * kChannels;
     if (input.size() < min_samples) return -1;
+    // Do not silently drop a partial block. The pipeline consumes exactly
+    // input_frame_samples(), but this guard keeps direct callers honest.
+    if (input.size() % min_samples != 0u) return -1;
 
     const size_t num_blocks = input.size() / min_samples;
     const size_t bytes_per_block = hd_ ? 6u : 4u;

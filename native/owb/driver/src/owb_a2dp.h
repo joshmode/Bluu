@@ -9,6 +9,7 @@
 #include <bthioctl.h>   // BT IOCTL codes
 #include <bthddi.h>     // BTH_PROFILE_DRIVER_INTERFACE, BRB types, L2CAP_CHANNEL_HANDLE
 #include "avdtp.h"
+#include "recv_queue.h"
 
 #define OWB_DRIVER_VERSION_MAJOR 0
 #define OWB_DRIVER_VERSION_MINOR 3
@@ -37,16 +38,16 @@ typedef struct _OWB_DEVICE_EXTENSION {
     // servicio seguía mandando frames. Todos los submits son a PASSIVE_LEVEL.
     WDFWAITLOCK                  BrbLock;
 
-    // L2CAP channel handles (set after BRB_L2CA_OPEN_CHANNEL completes)
+    // L2CAP channel handles. Accessed atomically because receive/disconnect
+    // callbacks can run at DISPATCH_LEVEL while teardown
+    // runs at PASSIVE_LEVEL.
     L2CAP_CHANNEL_HANDLE         SignalingChannelHandle;
     L2CAP_CHANNEL_HANDLE         MediaChannelHandle;
 
     // AVDTP signaling state machine context
     OWB_AVDTP_CONTEXT            Avdtp;
 
-    // Preferred codec for A2DP negotiation (OWB_CODEC_*).
-    // Set to OWB_CODEC_SBC on init; updated via OWB_IOCTL_SET_CODEC_CONFIG.
-    ULONG                        PreferredCodecId;
+    ULONG                        SampleRateHz;
     ULONG                        MediaPacketCount;
     ULONG                        MediaNotStreamingCount;
     ULONG                        FrameCount;
@@ -64,7 +65,11 @@ typedef struct _OWB_DEVICE_EXTENSION {
     WDFWORKITEM              AvdtpWorkItem;
     UCHAR                    AvdtpWorkBuf[672]; // L2CAP_DEFAULT_MTU bytes
     USHORT                   AvdtpWorkLen;
-    ULONG                    PendingRecvLen;    // set by callback, read by work item
+    OWB_RECV_QUEUE           RecvQueue;
+    WDFSPINLOCK              RecvLock;
+    LONG                     WorkItemQueued;
+    LONG                     ProtocolFault;
+    LONG                     ClosingChannels;
 
     // Timer periódico que (re)abre el canal de señalización cuando el AVDTP está
     // Idle: maneja el link no listo en EvtDeviceAdd y la reconexión tras caída
@@ -82,3 +87,5 @@ EVT_WDF_DRIVER_DEVICE_ADD OwbEvtDeviceAdd;
 EVT_WDF_WORKITEM OwbAvdtpWorkCallback;
 EVT_WDF_WORKITEM OwbReconnectWorkCallback;
 EVT_WDF_TIMER    OwbReconnectTimer;
+EVT_WDF_DEVICE_D0_EXIT OwbEvtDeviceD0Exit;
+EVT_WDF_DEVICE_SELF_MANAGED_IO_CLEANUP OwbEvtDeviceSelfManagedIoCleanup;

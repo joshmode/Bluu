@@ -45,6 +45,18 @@ TEST(CodecLdac, RejectsInvalidQualityAndRate) {
     EXPECT_EQ(codec.get_param("freq"), 44100);
 }
 
+TEST(CodecLdac, FailedFrequencyChangeRestoresPreviousEncoderState) {
+    owb::CodecLdac codec;
+    ASSERT_EQ(codec.get_param("freq"), 44100);
+    EXPECT_FALSE(codec.set_param({"freq", 32000}));
+    EXPECT_EQ(codec.get_param("freq"), 44100);
+    std::vector<uint8_t> out(4096);
+    std::ptrdiff_t produced = 0;
+    for (int attempt = 0; attempt < 16 && produced <= 0; ++attempt)
+        produced = codec.encode(make_pcm_ldac(128), out);
+    EXPECT_GE(produced, 0);
+}
+
 TEST(CodecLdac, EncodeProducesOutput) {
     owb::CodecLdac codec;
     // The LDAC encoder accumulates nfrm_in_pkt frames (typically 4-6 at MTU=895)

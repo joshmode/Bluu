@@ -14,13 +14,4 @@
     DbgPrintEx(DPFLTR_DEFAULT_ID, DPFLTR_ERROR_LEVEL, \
                "OWB: " fmt "\n", ##__VA_ARGS__)
 
-// Nombre legible del estado AVDTP para las trazas.
-#define OwbAvdtpStateName(s)                                   \
-    ((s) == 0 ? "Idle"        :                                \
-     (s) == 1 ? "Connecting"  :                                \
-     (s) == 2 ? "Discovering" :                                \
-     (s) == 3 ? "Configuring" :                                \
-     (s) == 4 ? "Configured"  :                                \
-     (s) == 5 ? "Open"        :                                \
-     (s) == 6 ? "Streaming"   :                                \
-     (s) == 7 ? "Closing"     : "???")
+// State names come from the host-tested AVDTP state module (avdtp_state.h).

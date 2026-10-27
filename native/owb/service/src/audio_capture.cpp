@@ -98,7 +98,10 @@ bool AudioCapture::start() {
         return false;
     }
 
-    constexpr REFERENCE_TIME kBufDuration = 10 * 10000 * 100; // 100ms
+    // Capture in 20 ms periods. The old 100 ms period could judder the stream
+    // and forced larger pipeline bursts. 20 ms still leaves ample scheduling
+    // slack for loopback capture without sending large irregular packets.
+    constexpr REFERENCE_TIME kBufDuration = 200000; // 20 ms
     hr = impl_->client->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
         AUDCLNT_STREAMFLAGS_LOOPBACK,
@@ -172,7 +175,9 @@ std::ptrdiff_t AudioCapture::read(std::span<int16_t> buffer) {
     // returns more, discard it and let the next read resynchronise.
     if (frames_avail > buffer.size() / ch) {
         impl_->capture->ReleaseBuffer(frames_avail);
-        return -1;
+        // An oversize packet is a recoverable capture hiccup: skip this packet
+        // and let the next read resynchronise instead of ending capture.
+        return 0;
     }
 
     const size_t samples_avail = frames_avail * ch;

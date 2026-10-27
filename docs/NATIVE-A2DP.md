@@ -32,14 +32,20 @@ entries are rejected rather than mapped to a different codec.
    requires an A2DP protocol trace or equivalent instrumentation.
 5. No real Windows Bluetooth hardware validation has been performed in this
    repository. The rows in `docs/TESTING.md` remain pending.
+6. The service captures the current default render endpoint with WASAPI loopback.
+   It has no endpoint picker yet. If the Bluetooth endpoint is the default render
+   endpoint, this architecture can capture the wrong signal or create a routing
+   loop. End-to-end audio must not be claimed until this is validated on hardware.
 
 ## Installation and recovery
 
 Build and sign the driver on Windows with the WDK, review the generated package, then
-install it explicitly with the provided tools or your own signed installer. Preserve
-the published `oemNN.inf` identity so rollback is deterministic. The emergency
-rollback script deletes only the matching driver package and service; reboot to
-return to the inbox path.
+install it explicitly with `tools/install-native-a2dp.ps1`. The script refuses a
+missing/invalid signature unless `-AllowTestSigned` is explicitly supplied on a
+controlled test machine; it records the prior `oemNN.inf` identity and service state
+before changes. The legacy MSI project in `installer/` is quarantined and must not be
+built. The emergency rollback script deletes only the matching driver package and
+service; reboot to return to the inbox path.
 
 The AAC/aptX Classic BthA2dp preference is separate from this driver. It is a
 build-sensitive whole-PC value, saved and restorable through Bluu.
@@ -56,3 +62,18 @@ build/native-host/tests/driver/owb_driver_tests
 
 The service and driver targets require Windows, MSVC, and the WDK. Never publish a
 locally built driver as production-ready.
+
+## Validation
+
+On a Windows test machine, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/windows/smoke-provider.ps1
+powershell -ExecutionPolicy Bypass -File scripts/windows/hardware-validation.ps1
+```
+
+The first command validates provider discovery, manifest identity, hashes, and
+expected failure handling without a headset. The second records machine/radio/
+endpoint state, WPR trace metadata, provider behavior, diagnostic redaction, and
+basic performance measurements. Neither command marks a codec verified; record the
+independent result in `docs/TESTING.md`.

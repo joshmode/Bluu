@@ -44,6 +44,15 @@ VOID OwbEvtIoDeviceControl(
             }
 
             POWB_SEND_FRAME_INPUT frame = (POWB_SEND_FRAME_INPUT)buf;
+            if (frame->codec_id != OWB_CODEC_SBC &&
+                frame->codec_id != OWB_CODEC_LDAC &&
+                frame->codec_id != OWB_CODEC_APTX &&
+                frame->codec_id != OWB_CODEC_APTXHD &&
+                frame->codec_id != OWB_CODEC_AAC) {
+                OwbLog("SEND_FRAME: unsupported codec id %lu", frame->codec_id);
+                status = STATUS_INVALID_PARAMETER;
+                break;
+            }
             // Validate: data_len must fit in the input buffer AND not overflow
             // the RTP packet length (OWB_RTP_OVERHEAD + data_len <= 0xFFFF).
             if ((SIZE_T)frame->data_len > size - offsetof(OWB_SEND_FRAME_INPUT, data) ||
@@ -104,8 +113,14 @@ VOID OwbEvtIoDeviceControl(
             if (RtlEqualMemory(cfg->param_key, "switch", 6)) {
                 status = AvdtpSetPreferredCodec(devExt, cfg->codec_id);
                 OwbLog("SET_CODEC_CONFIG: AvdtpSetPreferredCodec -> 0x%x", status);
+            } else if (RtlEqualMemory(cfg->param_key, "freq", 4)) {
+                if (cfg->param_value != 44100 && cfg->param_value != 48000) {
+                    status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+                devExt->SampleRateHz = (ULONG)cfg->param_value;
+                status = AvdtpSetPreferredFormat(devExt, devExt->SampleRateHz, 2u);
             } else if (RtlEqualMemory(cfg->param_key, "quality", 7) ||
-                       RtlEqualMemory(cfg->param_key, "freq", 4) ||
                        RtlEqualMemory(cfg->param_key, "bitpool", 7)) {
                 // Encoder parameters are owned by the service. Only "switch"
                 // triggers AVDTP renegotiation, so acknowledge these without

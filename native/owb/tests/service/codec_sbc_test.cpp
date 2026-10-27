@@ -76,3 +76,13 @@ TEST(CodecSbc, EncodeReturnsMinusOneOnTinyOutputBuffer) {
     std::vector<uint8_t> out(1);  // way too small
     EXPECT_EQ(codec.encode(pcm, out), -1);
 }
+
+TEST(CodecSbc, RejectsOutOfRangeParameters) {
+    owb::CodecSbc codec;
+    EXPECT_FALSE(codec.set_param({"bitpool", 0}));
+    EXPECT_FALSE(codec.set_param({"bitpool", 54}));
+    EXPECT_FALSE(codec.set_param({"freq", 12345}));
+    EXPECT_FALSE(codec.set_param({"mode", 9}));
+    EXPECT_EQ(codec.get_param("bitpool"), 53);
+    EXPECT_EQ(codec.get_param("freq"), 44100);
+}

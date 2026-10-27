@@ -1,38 +1,11 @@
 <Project Sdk="WixToolset.Sdk/5.0.0">
+  <!-- QUARANTINED: see README.md in this directory. This stale upstream project
+       is deliberately not buildable. Use tools/install-native-a2dp.ps1. -->
   <PropertyGroup>
-    <OutputName>OpenWinBlue-Setup</OutputName>
-    <Platform>x64</Platform>
-    <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>QUARANTINED-DO-NOT-BUILD</OutputName>
+    <EnableDefaultItems>false</EnableDefaultItems>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.0"/>
-    <PackageReference Include="WixToolset.UI.wixext"   Version="5.0.0"/>
-  </ItemGroup>
-
-  <!-- Release: rutas de build firmado oficialmente -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <DefineConstants>
-      ProductVersion=0.4.0;
-      ServiceBuildDir=$(MSBuildThisFileDirectory)..\build\release\service;
-      GuiBuildDir=$(MSBuildThisFileDirectory)..\gui\OpenWinBlue\bin\Publish\win-x64;
-      DriverBuildDir=$(MSBuildThisFileDirectory)..\driver\x64\Release
-    </DefineConstants>
-  </PropertyGroup>
-
-  <!-- Debug: rutas de build local, driver con certificado de prueba -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == ''">
-    <DefineConstants>
-      ProductVersion=0.4.0;
-      ServiceBuildDir=$(MSBuildThisFileDirectory)..\build\nmake-debug\service;
-      GuiBuildDir=$(MSBuildThisFileDirectory)..\gui\OpenWinBlue\bin\Publish\win-x64;
-      DriverBuildDir=$(MSBuildThisFileDirectory)..\build\driver
-    </DefineConstants>
-  </PropertyGroup>
-
-  <!-- ONNX Runtime DirectML: solo si existe en la maquina de build (dev local).
-       CI sin C:\onnxruntime compila el MSI sin las DLLs de AI. -->
-  <PropertyGroup Condition="Exists('C:\onnxruntime\lib\onnxruntime.dll')">
-    <DefineConstants>$(DefineConstants);OnnxDir=C:\onnxruntime\lib</DefineConstants>
-  </PropertyGroup>
+  <Target Name="Build">
+    <Error Text="The stale OpenWinBlue MSI project is quarantined. Use tools/install-native-a2dp.ps1 and review docs/NATIVE-A2DP.md." />
+  </Target>
 </Project>

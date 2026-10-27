@@ -252,7 +252,7 @@ impl AudioBackend for DemoBackend {
 }
 
 fn demo_provider() -> Vec<bluu_core::ProviderRecord> {
-    serde_json::from_value(serde_json::json!({
+    serde_json::from_value::<bluu_core::ProviderRecord>(serde_json::json!({
         "manifest": {
             "api_version": 1,
             "id": "demo.ldac",
@@ -290,5 +290,21 @@ fn demo_provider() -> Vec<bluu_core::ProviderRecord> {
         "executable_sha256": "demo-fixture",
         "simulated": true
     }))
+    .map(|provider| vec![provider])
     .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn demo_provider_is_present_and_valid() {
+        let providers = demo_provider();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].manifest.id, "demo.ldac");
+        assert!(providers[0].is_usable());
+        bluu_core::provider::validate_manifest(&providers[0].manifest)
+            .expect("demo provider manifest");
+    }
 }

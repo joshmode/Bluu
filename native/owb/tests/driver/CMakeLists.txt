@@ -1,5 +1,7 @@
 add_executable(owb_driver_tests
     avdtp_packets_test.cpp
+    avdtp_state_test.cpp
+    recv_queue_test.cpp
 )
 
 target_link_libraries(owb_driver_tests PRIVATE

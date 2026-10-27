@@ -9,12 +9,12 @@ headsets we have tested. The machine-readable source is
 | Codec | Windows 10 | Windows 11 | App-set preference | App-set parameters |
 |---|---|---|---|---|
 | SBC | Yes (1507+) | Yes | No documented API | No |
-| AAC | Not in Microsoft's table | Yes (21H2+) | No documented API | No |
-| aptX Classic | Yes (1507+) | Yes | No documented API | No |
-| aptX HD | No | No | No | No |
+| AAC | Not in Microsoft's table | Yes (21H2+) | One opt-in BthA2dp value | No |
+| aptX Classic | Yes (1507+) | Yes | Indirectly via AAC disable on affected builds | No |
+| aptX HD | No | No | Optional native provider | Provider-dependent |
 | aptX Adaptive | No | Select Qualcomm radios, 24H2+ | OEM/radio only | No generic API |
 | aptX Lossless | No | Select Qualcomm radios (listed together with Adaptive) | No generic API | No |
-| LDAC | No | No | No | No |
+| LDAC | No | No | Optional native provider | Provider-dependent |
 | LC3 | No A2DP | LE Audio vendor path | Not an A2DP preference | ACX/VSAP only |
 
 ## Feasibility statuses
@@ -47,7 +47,7 @@ headsets we have tested. The machine-readable source is
 
 ## “Enabling” reality
 
-- The only supported registry value is the narrow, documented-in-Blue-UI
+- The only registry value Bluu writes is the narrow, undocumented
   `BthA2dp\Parameters\BluetoothAacEnable` AAC preference. It is backed up,
   explicitly consented, and cannot register additional codecs.
 - Advanced preference/registration is supported through the provider API. The

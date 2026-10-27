@@ -19,4 +19,6 @@ operating system; no AAC codec binary is redistributed.
 
 The FFmpeg-derived source is limited to the codec tables and block DSP functions in
 `third-party/ffmpeg-aptx`. It is not a build of the FFmpeg framework or its
-command-line programs. Preserve the FFmpeg copyright and LGPL notices.
+command-line programs. Preserve the FFmpeg copyright and LGPL notices. The full
+LGPL-2.1 text shipped with that component is
+`third-party/ffmpeg-aptx/COPYING.LGPL-2.1`.

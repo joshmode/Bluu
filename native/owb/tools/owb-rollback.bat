@@ -43,11 +43,15 @@ if not defined PUBLISHED (
 for %%p in (!PUBLISHED!) do (
     echo Deleting %%p ^(%OWB_INF%^)...
     pnputil /delete-driver %%p /uninstall /force
+    if errorlevel 1 (
+        echo WARNING: pnputil could not fully remove %%p. Reboot, then retry.
+    )
 )
 
-echo Step 3: Re-enabling Windows default A2DP driver (btavchdt.sys)...
-:: The inbox driver re-activates automatically once our driver is removed.
-:: A reboot finalizes the switch.
+echo Step 3: Restoring the Windows default A2DP stack...
+:: Removing the replacement package lets Windows re-enumerate the BTHENUM
+:: profile node. A reboot finalizes the switch; do not force-install the inbox
+:: driver manually or edit its service.
 
 echo.
 echo Done. Please REBOOT your PC to complete the rollback.

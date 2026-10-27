@@ -11,4 +11,5 @@
 !/docs/images/*.png
 /dist
 /.DS_Store
-
+/codex-session-*.md
+/handover.md

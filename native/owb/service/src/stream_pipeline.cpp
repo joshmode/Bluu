@@ -66,6 +66,7 @@ struct StreamPipeline::Impl {
 
     std::vector<int16_t>   accum;       // stereo interleaved, run()-thread only
     unsigned long          encode_fail_count = 0;
+    unsigned long          send_fail_count = 0;
 
     Impl(IAudioSource* s, A2dpStream* k)
         : source(s), sink(k) {}
@@ -115,7 +116,10 @@ struct StreamPipeline::Impl {
 
     void drain(std::vector<uint8_t>& out) {
         std::lock_guard<std::mutex> lock(codec_mtx);
-        if (!codec) return;
+        if (!codec) {
+            streaming = false;
+            return;
+        }
         const uint32_t id = codec_id.load();
         const int fs = codec->input_frame_samples();
         size_t consumed = 0;
@@ -127,10 +131,21 @@ struct StreamPipeline::Impl {
                     std::span<const int16_t>(accum.data(), frame),
                     std::span<uint8_t>(out.data(), out.size()));
                 if (n > 0) {
-                    sink->send_frame(id, std::span<const uint8_t>(
-                        out.data(), static_cast<size_t>(n)));
-                    streaming = true;
+                    if (sink->send_frame(id, std::span<const uint8_t>(
+                            out.data(), static_cast<size_t>(n)))) {
+                        streaming = true;
+                        send_fail_count = 0;
+                    } else {
+                        streaming = false;
+                        send_fail_count += 1;
+                        if (send_fail_count == 1 || send_fail_count % 500 == 0) {
+                            OWB_LOG_WARN(
+                                "sink->send_frame failed %lu times (codec=%u, state is not streaming)",
+                                send_fail_count, id);
+                        }
+                    }
                 } else {
+                    if (n < 0) streaming = false;
                     encode_fail_count += 1;
                     if (encode_fail_count == 1 || encode_fail_count % 500 == 0) {
                         OWB_LOG_WARN(
@@ -153,9 +168,27 @@ struct StreamPipeline::Impl {
                 std::span<const int16_t>(accum.data(), consumed),
                 std::span<uint8_t>(out.data(), out.size()));
             if (n > 0) {
-                sink->send_frame(id, std::span<const uint8_t>(
-                    out.data(), static_cast<size_t>(n)));
-                streaming = true;
+                if (sink->send_frame(id, std::span<const uint8_t>(
+                        out.data(), static_cast<size_t>(n)))) {
+                    streaming = true;
+                    send_fail_count = 0;
+                } else {
+                    streaming = false;
+                    send_fail_count += 1;
+                    if (send_fail_count == 1 || send_fail_count % 500 == 0) {
+                        OWB_LOG_WARN(
+                            "sink->send_frame failed %lu times (codec=%u, state is not streaming)",
+                            send_fail_count, id);
+                    }
+                }
+            } else if (n < 0) {
+                encode_fail_count += 1;
+                if (encode_fail_count == 1 || encode_fail_count % 500 == 0) {
+                    OWB_LOG_WARN(
+                        "codec->encode returned %lld (count: %lu)",
+                        static_cast<long long>(n), encode_fail_count);
+                }
+                streaming = false;
             }
         }
 

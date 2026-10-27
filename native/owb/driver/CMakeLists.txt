@@ -9,7 +9,11 @@
 #
 # Only the WDK-free AVDTP packet module is built here, so host tests can link it.
 
-add_library(owb_avdtp_packets STATIC src/avdtp_packets.c)
+add_library(owb_avdtp_packets STATIC
+    src/avdtp_packets.c
+    src/avdtp_state.c
+    src/recv_queue.c
+)
 
 target_include_directories(owb_avdtp_packets PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src

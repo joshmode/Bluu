@@ -63,3 +63,11 @@ TEST(CodecAptxHd, PreservesOutputAcrossBlocks) {
     std::vector<uint8_t> out(32);
     EXPECT_EQ(codec.encode(pcm, out), 12);
 }
+
+TEST(CodecAptx, RejectsPartialInputBlock) {
+    owb::CodecAptx codec(false);
+    auto pcm = make_pcm_aptx(4);
+    pcm.pop_back();
+    std::vector<uint8_t> out(16);
+    EXPECT_EQ(codec.encode(pcm, out), -1);
+}

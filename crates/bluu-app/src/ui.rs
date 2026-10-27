@@ -1411,7 +1411,7 @@ pub fn settings(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
             pill(ui, "Standard user UI", theme::good());
             pill(ui, "One opt-in HKLM toggle", theme::warn());
             pill(ui, "Provider-gated driver path", theme::warn());
-            pill(ui, "No background service", theme::good());
+            pill(ui, "No Bluu background daemon", theme::good());
             pill(ui, "No network code", theme::good());
         });
         ui.add_space(8.0);
