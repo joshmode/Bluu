@@ -150,10 +150,12 @@ requires a Windows machine, a Bluetooth radio, and headphones.
 
 Bluu is local-first: no account, telemetry, cloud dependency, or automatic uploads.
 Diagnostic exports are local JSON and redact device names, addresses, endpoint IDs,
-usernames, computer name, and paths by default. See [privacy](docs/PRIVACY.md).
+usernames, computer name, and paths by default. See the
+[privacy policy](PRIVACY.md) and [technical notes](docs/PRIVACY.md).
 
 ## Licence
 
 GPL-3.0-or-later, with the vendored third-party components retaining their
-respective licences. See [LICENSING.md](docs/LICENSING.md). Product names and
-trademarks belong to their respective owners.
+respective licences. See the [licence summary](LICENSE.md) and
+[licensing details](docs/LICENSING.md). Product names and trademarks belong to
+their respective owners.
