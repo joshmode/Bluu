@@ -75,6 +75,16 @@ int run_service() {
     if (!capture.start()) {
         OWB_LOG_WARN("WASAPI loopback unavailable");
         std::puts("[WARN] WASAPI loopback unavailable");
+    } else if (capture.endpoint_is_bluetooth()) {
+        // Fail closed: transmitting the Bluetooth endpoint's own loopback back
+        // into the same link is a feedback/routing loop and does not capture the
+        // intended system mix.
+        OWB_LOG_ERROR(
+            "Refusing A2DP pipeline: default render endpoint is Bluetooth (%s). "
+            "Select a non-Bluetooth output or implement explicit endpoint routing.",
+            capture.endpoint_name().c_str());
+        std::puts("[ERROR] Bluetooth endpoint routing is not supported safely");
+        capture.stop();
     } else {
         OWB_LOG_INFO("Audio capture: %d Hz, %d ch", capture.sample_rate(), capture.channels());
         std::printf("[OK]  Audio capture: %d Hz, %d ch\n",
@@ -93,14 +103,16 @@ int run_service() {
     std::puts(a2dp_ok ? "[OK]  A2DP stream driver connected"
                       : "[WARN] A2DP kernel driver not installed (stub mode)");
 
-    bool pipeline_ok = pipeline.start();
+    const bool capture_safe = capture.channels() > 0 &&
+                              !capture.endpoint_is_bluetooth();
+    bool pipeline_ok = capture_safe && pipeline.start();
     if (pipeline_ok) {
         OWB_LOG_INFO("Stream pipeline started (codec: %s)", pipeline.codec_name().c_str());
         std::printf("[OK]  Stream pipeline running (codec: %s)\n",
                     pipeline.codec_name().c_str());
     } else {
-        OWB_LOG_WARN("Stream pipeline could not start (no audio source)");
-        std::puts("[WARN] Stream pipeline could not start (no audio source)");
+        OWB_LOG_WARN("Stream pipeline disabled (no safe audio source)");
+        std::puts("[WARN] Stream pipeline disabled (no safe audio source)");
     }
 
     if (!ipc.start()) {

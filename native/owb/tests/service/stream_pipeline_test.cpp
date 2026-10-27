@@ -38,6 +38,7 @@ TEST_F(StreamPipelineTest, SetCodecParam_ReachesActiveCodecWithoutRebuild) {
     EXPECT_TRUE(pipeline.set_codec_param("bitpool", 35));
     EXPECT_EQ(pipeline.codec_id(), OWB_CODEC_SBC);
     EXPECT_EQ(pipeline.bitrate(), 228768u);
+    EXPECT_EQ(pipeline.get_codec_param("bitpool"), 35);
 }
 
 TEST_F(StreamPipelineTest, SetCodecParam_UnknownKeyIsRejected) {

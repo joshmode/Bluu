@@ -35,6 +35,7 @@ public:
     // ICodecController
     void        set_codec_id(uint32_t codec_id) override;
     bool        set_codec_param(std::string_view key, int64_t value) override;
+    std::optional<int64_t> get_codec_param(std::string_view key) const override;
     uint32_t    codec_id() const noexcept       override;
     std::string codec_name() const              override;
     bool        is_streaming() const noexcept   override;

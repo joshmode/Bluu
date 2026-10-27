@@ -95,6 +95,7 @@ native service and a real headset before making release claims.
 - Device disappears during scan.
 - Empty SDP cache.
 - Endpoint exists but is disabled.
+- Default render endpoint is the Bluetooth sink (native pipeline must refuse).
 - UAC cancelled.
 - Helper fails to start.
 - Trace session name already in use.

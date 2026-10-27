@@ -63,7 +63,10 @@ typedef struct _OWB_DEVICE_EXTENSION {
     // processing (which allocates BRBs via WdfRequestCreate) must run
     // at PASSIVE_LEVEL via this work item.
     WDFWORKITEM              AvdtpWorkItem;
-    UCHAR                    AvdtpWorkBuf[672]; // L2CAP_DEFAULT_MTU bytes
+    // AVPTP signaling fragment/reassembly buffer. L2CAP's default MTU is 672;
+    // some stacks negotiate a larger MTU, so use the same bounded maximum as
+    // the host-tested reassembler rather than silently truncating a packet.
+    UCHAR                    AvdtpWorkBuf[OWB_AVDTP_SIGNAL_MAX];
     USHORT                   AvdtpWorkLen;
     OWB_RECV_QUEUE           RecvQueue;
     WDFSPINLOCK              RecvLock;

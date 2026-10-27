@@ -357,8 +357,12 @@ struct IpcServer::Impl {
     bool set_codec_param(std::string_view key, int64_t value) {
         if (!controller_ || !stream_) return false;
         const uint32_t active = controller_->codec_id();
+        const std::optional<int64_t> previous = controller_->get_codec_param(key);
         if (!controller_->set_codec_param(key, value)) return false;
         if (stream_->set_codec_config(active, key, value)) return true;
+        if (previous) {
+            (void)controller_->set_codec_param(key, *previous);
+        }
         return false;
     }
 

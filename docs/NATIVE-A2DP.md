@@ -38,8 +38,9 @@ entries are rejected rather than mapped to a different codec.
    repository. The rows in `docs/TESTING.md` remain pending.
 6. The service captures the current default render endpoint with WASAPI loopback.
    It has no endpoint picker yet. If the Bluetooth endpoint is the default render
-   endpoint, this architecture can capture the wrong signal or create a routing
-   loop. End-to-end audio must not be claimed until this is validated on hardware.
+   endpoint, the service detects `BTHENUM`/`BTHLEENUM` and disables the pipeline
+   instead of transmitting a loopback back into the same link. End-to-end audio
+   must not be claimed until an explicit routing design is validated on hardware.
 
 ## Installation and recovery
 

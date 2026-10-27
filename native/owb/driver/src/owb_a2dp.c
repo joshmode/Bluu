@@ -54,7 +54,15 @@ VOID OwbAvdtpWorkCallback(_In_ WDFWORKITEM WorkItem)
             break;
         }
 
-        const ULONG readLen = min(pending, (ULONG)sizeof(ext->AvdtpWorkBuf));
+        // Request the full indicated length. Truncating it leaves the rest of
+        // the L2CAP packet queued and would desynchronize AVDTP framing.
+        if (pending > sizeof(ext->AvdtpWorkBuf) ||
+            pending > OWB_AVDTP_SIGNAL_MAX) {
+            OwbLog("AvdtpWork: signaling packet too large (%lu)", pending);
+            InterlockedExchange(&ext->ProtocolFault, 1);
+            break;
+        }
+        const ULONG readLen = pending;
         struct _BRB_L2CA_ACL_TRANSFER* brb =
             (struct _BRB_L2CA_ACL_TRANSFER*)
             ext->BthInterface.BthAllocateBrb(BRB_L2CA_ACL_TRANSFER, 'OWBR');

@@ -3,6 +3,8 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -138,7 +140,12 @@ public:
     }
     bool set_codec_param(std::string_view key, int64_t value) override {
         params.emplace_back(std::string(key), value);
+        values[std::string(key)] = value;
         return true;
+    }
+    std::optional<int64_t> get_codec_param(std::string_view key) const override {
+        const auto it = values.find(std::string(key));
+        return it == values.end() ? std::nullopt : std::optional<int64_t>(it->second);
     }
     uint32_t    codec_id() const noexcept override { return active_id; }
     std::string codec_name() const override         { return "SBC"; }
@@ -147,6 +154,7 @@ public:
 
     std::vector<uint32_t>                        switched_ids;
     std::vector<std::pair<std::string, int64_t>> params;
+    std::map<std::string, int64_t>               values;
     uint32_t                                     active_id        = OWB_CODEC_SBC;
     uint32_t                                     reported_bitrate = 0;
 };

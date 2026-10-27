@@ -12,8 +12,10 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <functiondiscoverykeys_devpkey.h>
 
 #include <algorithm>
+#include <cwchar>
 
 namespace owb {
 
@@ -66,6 +68,51 @@ bool AudioCapture::start() {
         OWB_LOG_ERROR("GetDefaultAudioEndpoint failed: 0x%08lx", (unsigned long)hr);
         release_impl(impl_.get());
         return false;
+    }
+
+    endpoint_name_.clear();
+    endpoint_is_bluetooth_ = false;
+    {
+        IPropertyStore* store = nullptr;
+        if (SUCCEEDED(impl_->device->OpenPropertyStore(STGM_READ, &store)) && store) {
+            PROPVARIANT value;
+            PropVariantInit(&value);
+            if (SUCCEEDED(store->GetValue(PKEY_Device_FriendlyName, &value)) &&
+                value.vt == VT_LPWSTR && value.pwszVal) {
+                const size_t len = std::wcslen(value.pwszVal);
+                if (len > 512u) {
+                    PropVariantClear(&value);
+                    store->Release();
+                    OWB_LOG_ERROR("Audio endpoint name is unexpectedly long");
+                    release_impl(impl_.get());
+                    return false;
+                }
+                const int bytes = WideCharToMultiByte(
+                    CP_UTF8, 0, value.pwszVal, static_cast<int>(len),
+                    nullptr, 0, nullptr, nullptr);
+                if (bytes > 0) {
+                    endpoint_name_.resize(static_cast<size_t>(bytes));
+                    (void)WideCharToMultiByte(
+                        CP_UTF8, 0, value.pwszVal, static_cast<int>(len),
+                        endpoint_name_.data(), bytes, nullptr, nullptr);
+                }
+            }
+            PROPVARIANT enumerator_value;
+            PropVariantInit(&enumerator_value);
+            if (SUCCEEDED(store->GetValue(PKEY_Device_EnumeratorName, &enumerator_value)) &&
+                enumerator_value.vt == VT_LPWSTR && enumerator_value.pwszVal &&
+                (_wcsicmp(enumerator_value.pwszVal, L"BTHENUM") == 0 ||
+                 _wcsicmp(enumerator_value.pwszVal, L"BTHLEENUM") == 0)) {
+                endpoint_is_bluetooth_ = true;
+            }
+            PropVariantClear(&enumerator_value);
+            PropVariantClear(&value);
+            store->Release();
+        }
+    }
+    if (!endpoint_name_.empty()) {
+        OWB_LOG_INFO("Capture endpoint: %s (Bluetooth=%d)",
+                     endpoint_name_.c_str(), endpoint_is_bluetooth_ ? 1 : 0);
     }
 
     hr = impl_->device->Activate(

@@ -114,6 +114,11 @@ struct StreamPipeline::Impl {
         return (bps && *bps > 0) ? static_cast<uint32_t>(*bps) : 0u;
     }
 
+    std::optional<int64_t> get_param(std::string_view key) const {
+        std::lock_guard<std::mutex> lock(codec_mtx);
+        return codec ? codec->get_param(key) : std::nullopt;
+    }
+
     void drain(std::vector<uint8_t>& out) {
         std::lock_guard<std::mutex> lock(codec_mtx);
         if (!codec) {
@@ -295,6 +300,10 @@ void StreamPipeline::set_codec_id(uint32_t codec_id) {
 
 bool StreamPipeline::set_codec_param(std::string_view key, int64_t value) {
     return impl_->set_param(key, value);
+}
+
+std::optional<int64_t> StreamPipeline::get_codec_param(std::string_view key) const {
+    return impl_->get_param(key);
 }
 
 uint32_t StreamPipeline::bitrate() const {
