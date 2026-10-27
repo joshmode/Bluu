@@ -29,6 +29,7 @@ struct AudioCapture::Impl {
     int                         channels_    = 2;
     bool                        running_     = false;
     bool                        get_buffer_logged_ = false;
+    bool                        endpoint_is_bluetooth = true;
 };
 
 AudioCapture::AudioCapture() : impl_(std::make_unique<Impl>()) {}
@@ -47,6 +48,7 @@ void AudioCapture::release_impl(Impl* impl) {
     impl->enumerator.reset();
     impl->running_ = false;
     impl->get_buffer_logged_ = false;
+    impl->endpoint_is_bluetooth = true;
 }
 
 bool AudioCapture::start() {
@@ -71,7 +73,8 @@ bool AudioCapture::start() {
     }
 
     endpoint_name_.clear();
-    endpoint_is_bluetooth_ = false;
+    endpoint_is_bluetooth_ = true;
+    impl_->endpoint_is_bluetooth = true;
     {
         IPropertyStore* store = nullptr;
         if (SUCCEEDED(impl_->device->OpenPropertyStore(STGM_READ, &store)) && store) {
@@ -101,15 +104,16 @@ bool AudioCapture::start() {
             PropVariantInit(&enumerator_value);
             if (SUCCEEDED(store->GetValue(PKEY_Device_EnumeratorName, &enumerator_value)) &&
                 enumerator_value.vt == VT_LPWSTR && enumerator_value.pwszVal &&
-                (_wcsicmp(enumerator_value.pwszVal, L"BTHENUM") == 0 ||
-                 _wcsicmp(enumerator_value.pwszVal, L"BTHLEENUM") == 0)) {
-                endpoint_is_bluetooth_ = true;
+                _wcsicmp(enumerator_value.pwszVal, L"BTHENUM") != 0 &&
+                _wcsicmp(enumerator_value.pwszVal, L"BTHLEENUM") != 0) {
+                endpoint_is_bluetooth_ = false;
             }
             PropVariantClear(&enumerator_value);
             PropVariantClear(&value);
             store->Release();
         }
     }
+    impl_->endpoint_is_bluetooth = endpoint_is_bluetooth_;
     if (!endpoint_name_.empty()) {
         OWB_LOG_INFO("Capture endpoint: %s (Bluetooth=%d)",
                      endpoint_name_.c_str(), endpoint_is_bluetooth_ ? 1 : 0);

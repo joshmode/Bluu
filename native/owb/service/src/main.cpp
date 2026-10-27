@@ -72,7 +72,8 @@ int run_service() {
 
     std::puts("OpenWinBlue service starting\xe2\x80\xa6");
 
-    if (!capture.start()) {
+    const bool capture_started = capture.start();
+    if (!capture_started) {
         OWB_LOG_WARN("WASAPI loopback unavailable");
         std::puts("[WARN] WASAPI loopback unavailable");
     } else if (capture.endpoint_is_bluetooth()) {
@@ -103,7 +104,7 @@ int run_service() {
     std::puts(a2dp_ok ? "[OK]  A2DP stream driver connected"
                       : "[WARN] A2DP kernel driver not installed (stub mode)");
 
-    const bool capture_safe = capture.channels() > 0 &&
+    const bool capture_safe = capture_started && capture.channels() > 0 &&
                               !capture.endpoint_is_bluetooth();
     bool pipeline_ok = capture_safe && pipeline.start();
     if (pipeline_ok) {

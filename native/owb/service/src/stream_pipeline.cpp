@@ -58,6 +58,7 @@ struct StreamPipeline::Impl {
     std::thread           thread;
     std::atomic<bool>     running{false};
     std::atomic<bool>     streaming{false};
+    std::atomic<int64_t>  last_stream_ms{0};
     std::atomic<uint32_t> codec_id{OWB_CODEC_SBC};
 
     mutable std::mutex     codec_mtx;
@@ -139,6 +140,8 @@ struct StreamPipeline::Impl {
                     if (sink->send_frame(id, std::span<const uint8_t>(
                             out.data(), static_cast<size_t>(n)))) {
                         streaming = true;
+                        last_stream_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch()).count();
                         send_fail_count = 0;
                     } else {
                         streaming = false;
@@ -176,6 +179,8 @@ struct StreamPipeline::Impl {
                 if (sink->send_frame(id, std::span<const uint8_t>(
                         out.data(), static_cast<size_t>(n)))) {
                     streaming = true;
+                    last_stream_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count();
                     send_fail_count = 0;
                 } else {
                     streaming = false;
@@ -265,6 +270,7 @@ struct StreamPipeline::Impl {
             drain(out);
         }
         streaming = false;
+        last_stream_ms = 0;
     }
 };
 
@@ -292,6 +298,7 @@ void StreamPipeline::stop() {
     OWB_LOG_INFO("StreamPipeline stopping");
     if (impl_->thread.joinable()) impl_->thread.join();
     impl_->streaming = false;
+    impl_->last_stream_ms = 0;
 }
 
 void StreamPipeline::set_codec_id(uint32_t codec_id) {
@@ -320,7 +327,10 @@ std::string StreamPipeline::codec_name() const {
 }
 
 bool StreamPipeline::is_streaming() const noexcept {
-    return impl_->streaming.load();
+    if (!impl_->streaming.load()) return false;
+    const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    return now - impl_->last_stream_ms.load() <= 2000;
 }
 
 } // namespace owb

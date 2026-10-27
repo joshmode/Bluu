@@ -72,7 +72,10 @@ bool CodecLdac::set_param(CodecParam p) {
         const int previous = freq_;
         freq_ = static_cast<int>(p.value);
         reinit();
-        if (!initialized_) freq_ = previous;
+        if (!initialized_) {
+            freq_ = previous;
+            reinit();
+        }
         return initialized_;
     }
     return false;

@@ -31,7 +31,9 @@ private:
     static void release_impl(Impl* impl); // releases COM objects + mix_format
     std::unique_ptr<Impl> impl_;
     std::string endpoint_name_;
-    bool endpoint_is_bluetooth_ = false;
+    // Fail closed until the endpoint enumerator has been positively identified
+    // as non-Bluetooth.
+    bool endpoint_is_bluetooth_ = true;
 };
 
 } // namespace owb
