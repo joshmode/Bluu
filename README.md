@@ -129,7 +129,7 @@ On the development host (macOS, no Windows radio):
 
 - 54 Rust workspace tests pass (31 core, 9 platform, 3 app, 4 provider-contract,
   7 native-provider adapter);
-- 50 native AVDTP/packet/receive-queue host tests pass;
+- 51 native AVDTP/packet/receive-queue host tests pass;
 - formatting and Clippy with `-D warnings` pass;
 - the Windows target type-checks;
 - the demo UI/screenshot renderer builds;

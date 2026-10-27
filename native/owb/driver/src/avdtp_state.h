@@ -159,6 +159,11 @@ void OwbAvdtpStatePeerDisconnected(
 // True when a fresh signaling channel may be opened.
 int OwbAvdtpStateCanReconnect(const OWB_AVDTP_CONTEXT* Context);
 
+// True only when the codec is the negotiated active codec and media is streaming.
+int OwbAvdtpStateCodecAllowed(
+    const OWB_AVDTP_CONTEXT* Context,
+    unsigned long CodecId);
+
 const char* OwbAvdtpStateName(OWB_AVDTP_STATE State);
 
 #ifdef __cplusplus

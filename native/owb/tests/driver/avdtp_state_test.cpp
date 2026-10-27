@@ -318,3 +318,13 @@ TEST(AvdtpState, TruncatedAndNullPacketsFailClosed) {
               OwbAvdtpResultProtocolError);
     EXPECT_EQ(machine.context.State, OwbAvdtpStateIdle);
 }
+
+TEST(AvdtpState, MediaCodecMustMatchNegotiatedCodec) {
+    Machine machine;
+    EXPECT_FALSE(OwbAvdtpStateCodecAllowed(&machine.context, OWB_CODEC_SBC));
+    machine.configure();
+    EXPECT_TRUE(OwbAvdtpStateCodecAllowed(&machine.context, OWB_CODEC_SBC));
+    EXPECT_FALSE(OwbAvdtpStateCodecAllowed(&machine.context, OWB_CODEC_LDAC));
+    machine.context.State = OwbAvdtpStateOpen;
+    EXPECT_FALSE(OwbAvdtpStateCodecAllowed(&machine.context, OWB_CODEC_SBC));
+}

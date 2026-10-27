@@ -75,6 +75,17 @@ jobs:
         shell: pwsh
         run: .\scripts\windows\smoke-provider.ps1
 
+  native-service-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure native service and tests
+        run: cmake -S native/owb -B build/native-service -DOWB_BUILD_TESTS=ON
+      - name: Build native service and tests
+        run: cmake --build build/native-service --config Debug --target owb_service owb_service_tests -j 4
+      - name: Run native service tests
+        run: ctest --test-dir build/native-service -C Debug --output-on-failure
+
   windows-check:
     runs-on: windows-latest
     steps:

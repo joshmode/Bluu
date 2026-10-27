@@ -309,11 +309,13 @@ NTSTATUS L2capSendMediaFrame(
     _In_reads_bytes_(FrameLen) const UCHAR* FrameData,
     _In_ USHORT FrameLen)
 {
-    if (DevExt->Avdtp.State != OwbAvdtpStateStreaming) {
+    if (!OwbAvdtpStateCodecAllowed(&DevExt->Avdtp, CodecId)) {
         DevExt->MediaNotStreamingCount++;
         if ((DevExt->MediaNotStreamingCount % 1000u) == 1u) {
-            OwbLog("SendMedia: descartado #%lu - estado=%s (no Streaming)",
-                   DevExt->MediaNotStreamingCount, OwbAvdtpStateName(DevExt->Avdtp.State));
+            OwbLog("SendMedia: descartado #%lu - estado=%s codec=%lu active=%lu",
+                   DevExt->MediaNotStreamingCount,
+                   OwbAvdtpStateName(DevExt->Avdtp.State),
+                   CodecId, DevExt->Avdtp.ActiveCodecId);
         }
         return STATUS_DEVICE_NOT_CONNECTED;
     }

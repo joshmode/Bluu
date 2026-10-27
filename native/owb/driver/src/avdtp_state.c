@@ -242,6 +242,12 @@ int OwbAvdtpStateCanReconnect(const OWB_AVDTP_CONTEXT* context) {
            context->BackoffTicks == 0u;
 }
 
+int OwbAvdtpStateCodecAllowed(const OWB_AVDTP_CONTEXT* context,
+                              unsigned long codec_id) {
+    return context && context->State == OwbAvdtpStateStreaming &&
+           context->ActiveCodecId == codec_id;
+}
+
 const char* OwbAvdtpStateName(OWB_AVDTP_STATE state) {
     switch (state) {
         case OwbAvdtpStateIdle:        return "Idle";

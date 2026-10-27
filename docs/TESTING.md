@@ -29,7 +29,7 @@ Results:
   install/uninstall).
 - Native provider adapter tests: 7 passed, including the versioned 48-byte
   SetCodec payload layout.
-- Native AVDTP/packet/receive-queue host tests: 50 passed (SEP discovery, codec
+- Native AVDTP/packet/receive-queue host tests: 51 passed (SEP discovery, codec
   capability matching, SET_CONFIGURATION bytes, LDAC frequency codes, per-codec
   RTP/payload framing, transactions, fragmentation, abort, timeout/backoff, and
   bounded receive queueing).
