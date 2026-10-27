@@ -1,6 +1,6 @@
-//! Small, short-lived elevated helper. It starts one ETW trace session, watches the
-//! Microsoft-Windows-Bluetooth-BthA2dp provider, writes a minimal JSON result, and exits.
-//! It accepts no arbitrary commands and makes no system changes.
+//! Small, short-lived elevated helper with two fixed operations: a bounded ETW
+//! trace, or the explicitly requested BthA2dp AAC preference toggle. It accepts
+//! no arbitrary commands or paths and exits after writing one JSON result.
 //!
 //! The ETW provider and event are documented only indirectly (Microsoft's
 //! BluetoothStack.wprp). The A2dpStreaming payload field layout is not a supported
@@ -15,6 +15,13 @@ fn main() {
 #[cfg(windows)]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args
+        .iter()
+        .any(|a| a == bluu_platform::launch::AAC_HELPER_ARG)
+    {
+        run_aac_helper(&args);
+        return;
+    }
     let invocation = match bluu_platform::launch::parse_helper_args(&args) {
         Ok(v) => v,
         Err(e) => {
@@ -49,6 +56,52 @@ fn main() {
 }
 
 #[cfg(windows)]
+fn run_aac_helper(args: &[String]) {
+    let invocation = match bluu_platform::launch::parse_aac_helper_args(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
+    if !bluu_platform::launch::safe_temp_json_path(&invocation.result_path, "bluu-aac-") {
+        eprintln!("refusing a result path outside the user's temporary directory");
+        std::process::exit(2);
+    }
+    let result = match invocation.action {
+        bluu_platform::launch::AacHelperAction::Set(enabled) => {
+            if invocation.dry_run {
+                bluu_platform::windows::codec_toggle::preview_toggle(enabled)
+            } else {
+                bluu_platform::windows::codec_toggle::set_aac_enabled(enabled)
+            }
+        }
+        bluu_platform::launch::AacHelperAction::Restore => {
+            bluu_platform::windows::codec_toggle::restore_toggle()
+        }
+    };
+    let output = match result {
+        Ok(change) => AacHelperJson {
+            applied: change.applied,
+            previous: change.previous,
+            aac_enabled: change.aac_enabled,
+            message: change.message,
+            error: None,
+        },
+        Err(e) => AacHelperJson {
+            applied: false,
+            previous: None,
+            aac_enabled: None,
+            message: String::new(),
+            error: Some(error_text(&e)),
+        },
+    };
+    if let Ok(json) = serde_json::to_vec(&output) {
+        let _ = std::fs::write(&invocation.result_path, json);
+    }
+}
+
+#[cfg(windows)]
 fn error_text(error: &bluu_core::backend::BackendError) -> String {
     match error {
         bluu_core::backend::BackendError::ElevationRequired(s)
@@ -70,6 +123,16 @@ struct HelperJson {
     captured_events: u32,
     session_started: bool,
     note: String,
+    error: Option<String>,
+}
+
+#[cfg(windows)]
+#[derive(serde::Serialize)]
+struct AacHelperJson {
+    applied: bool,
+    previous: Option<bool>,
+    aac_enabled: Option<bool>,
+    message: String,
     error: Option<String>,
 }
 

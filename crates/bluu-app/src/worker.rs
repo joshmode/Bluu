@@ -6,8 +6,8 @@ use std::sync::{
 use bluu_core::{
     backend::BackendError,
     model::{
-        CaptureOutcome, CaptureRequest, ProviderOperationOutcome, ProviderOperationRequest,
-        Snapshot,
+        CaptureOutcome, CaptureRequest, InboxCodecChange, ProviderOperationOutcome,
+        ProviderOperationRequest, Snapshot,
     },
     AudioBackend,
 };
@@ -17,6 +17,7 @@ pub enum WorkerEvent {
     Scanned(Box<Result<Snapshot, BackendError>>),
     Captured(Result<CaptureOutcome, BackendError>),
     ProviderOperated(Box<Result<ProviderOperationOutcome, BackendError>>),
+    InboxCodecChanged(Result<InboxCodecChange, BackendError>),
 }
 
 #[derive(Debug)]
@@ -24,6 +25,8 @@ pub enum WorkerRequest {
     Scan,
     Capture(CaptureRequest),
     ProviderOperation(ProviderOperationRequest),
+    SetInboxCodec { aac_enabled: bool, dry_run: bool },
+    RestoreInboxCodec,
 }
 
 pub struct Worker {
@@ -54,6 +57,19 @@ impl Worker {
                             let _ = event_tx.send(WorkerEvent::ProviderOperated(Box::new(
                                 backend.provider_operation(&request),
                             )));
+                        }
+                        WorkerRequest::SetInboxCodec {
+                            aac_enabled,
+                            dry_run,
+                        } => {
+                            let _ = event_tx.send(WorkerEvent::InboxCodecChanged(
+                                backend.set_inbox_codec_toggle(aac_enabled, dry_run),
+                            ));
+                        }
+                        WorkerRequest::RestoreInboxCodec => {
+                            let _ = event_tx.send(WorkerEvent::InboxCodecChanged(
+                                backend.restore_inbox_codec_toggle(),
+                            ));
                         }
                     }
                 }
@@ -86,6 +102,17 @@ impl Worker {
 
     pub fn provider_operation(&self, request: ProviderOperationRequest) {
         let _ = self.tx.send(WorkerRequest::ProviderOperation(request));
+    }
+
+    pub fn set_inbox_codec(&self, aac_enabled: bool, dry_run: bool) {
+        let _ = self.tx.send(WorkerRequest::SetInboxCodec {
+            aac_enabled,
+            dry_run,
+        });
+    }
+
+    pub fn restore_inbox_codec(&self) {
+        let _ = self.tx.send(WorkerRequest::RestoreInboxCodec);
     }
 
     pub fn poll(&self) -> Vec<WorkerEvent> {

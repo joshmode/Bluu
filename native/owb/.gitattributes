@@ -1,0 +1,26 @@
+# Normalize line endings
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sln text eol=crlf
+*.csproj text eol=crlf
+*.inf text eol=crlf
+
+# Explicit source file types
+*.c     text eol=lf
+*.h     text eol=lf
+*.cpp   text eol=lf
+*.hpp   text eol=lf
+*.cs    text eol=lf
+*.xaml  text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# Treat binary files as binary
+*.sys binary
+*.dll binary
+*.exe binary
+*.onnx binary
+*.png binary
+*.ico binary

@@ -19,6 +19,7 @@ try {
     $exe = Join-Path $targetDir "bluu.exe"
     $helper = Join-Path $targetDir "bluu-etw-helper.exe"
     $providerDemo = Join-Path $targetDir "bluu-provider-demo.exe"
+    $providerNative = Join-Path $targetDir "bluu-provider-owb.exe"
     if (-not (Test-Path $exe)) { throw "bluu.exe was not produced" }
     if (-not (Test-Path $helper)) { throw "bluu-etw-helper.exe was not produced" }
 
@@ -28,16 +29,29 @@ try {
     if (Test-Path $providerDemo) {
         Copy-Item $providerDemo $Output -Force
     }
+    if (Test-Path $providerNative) {
+        $nativeProviderDir = Join-Path $Output "providers\bluu-native-a2dp"
+        New-Item -ItemType Directory -Force -Path $nativeProviderDir | Out-Null
+        Copy-Item $providerNative $nativeProviderDir -Force
+        Copy-Item (Join-Path $root "providers\bluu-native-a2dp\provider.json") $nativeProviderDir -Force
+    }
+    else {
+        Write-Warning "bluu-provider-owb.exe was not built; native provider package omitted"
+    }
     Copy-Item (Join-Path $root "README.md") $Output -Force
-    Copy-Item (Join-Path $root "LICENSE-MIT") $Output -Force
-    Copy-Item (Join-Path $root "LICENSE-APACHE") $Output -Force
+    Copy-Item (Join-Path $root "LICENSE") $Output -Force
+    Copy-Item (Join-Path $root "packaging\THIRD-PARTY-NOTICES.md") $Output -Force
     Copy-Item (Join-Path $root "docs\SECURITY.md") $Output -Force
     Copy-Item (Join-Path $root "docs\TESTING.md") $Output -Force
+    Copy-Item (Join-Path $root "docs\NATIVE-A2DP.md") $Output -Force
 
     $sha = Get-FileHash (Join-Path $Output "bluu.exe") -Algorithm SHA256
     $helperSha = Get-FileHash (Join-Path $Output "bluu-etw-helper.exe") -Algorithm SHA256
     $providerSha = if (Test-Path (Join-Path $Output "bluu-provider-demo.exe")) {
         (Get-FileHash (Join-Path $Output "bluu-provider-demo.exe") -Algorithm SHA256).Hash
+    } else { "not included" }
+    $nativeProviderSha = if (Test-Path (Join-Path $Output "providers\bluu-native-a2dp\bluu-provider-owb.exe")) {
+        (Get-FileHash (Join-Path $Output "providers\bluu-native-a2dp\bluu-provider-owb.exe") -Algorithm SHA256).Hash
     } else { "not included" }
     @"
 Bluu portable Windows build
@@ -48,11 +62,16 @@ Architecture: x86_64-pc-windows-msvc
 bluu.exe SHA-256: $($sha.Hash)
 bluu-etw-helper.exe SHA-256: $($helperSha.Hash)
 bluu-provider-demo.exe SHA-256: $providerSha
+bluu-provider-owb.exe SHA-256: $nativeProviderSha
 
 Run bluu.exe as a standard user. The helper is used only when the user chooses
 "Verify live codec" and approves the one-time elevation prompt.
 
-No driver, service, registry write, or startup entry is installed.
+No driver, service, registry modification, or startup entry is installed by this
+portable build. The AAC toggle is an explicit in-app action with its own consent.
+The optional native provider is included as an uninstalled package; installing its
+driver/service requires the separate explicit OpenWinBlue installer and administrator
+approval.
 "@ | Set-Content (Join-Path $Output "BUILD-INFO.txt")
 
     Compress-Archive -Path (Join-Path $Output "*") -DestinationPath "$Output.zip" -Force

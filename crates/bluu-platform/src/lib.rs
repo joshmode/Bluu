@@ -98,4 +98,15 @@ impl AudioBackend for UnsupportedBackend {
             "advanced codec providers are Windows-only".into(),
         ))
     }
+
+    fn inbox_codec_toggle(
+        &mut self,
+    ) -> Result<bluu_core::model::InboxCodecToggle, bluu_core::backend::BackendError> {
+        Ok(bluu_core::model::InboxCodecToggle {
+            supported: false,
+            aac_enabled: None,
+            registry_path: String::new(),
+            note: "The AAC/aptX preference key is Windows-only.".into(),
+        })
+    }
 }

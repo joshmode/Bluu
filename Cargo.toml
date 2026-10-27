@@ -6,13 +6,14 @@ members = [
     "crates/bluu-app",
     "crates/bluu-etw-helper",
     "crates/bluu-provider-demo",
+    "crates/bluu-provider-owb",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/joshmode/Bluu"
 homepage = "https://github.com/joshmode/Bluu"
 

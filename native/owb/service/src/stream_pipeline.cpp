@@ -1,0 +1,284 @@
+// service/src/stream_pipeline.cpp
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <winioctl.h>    // CTL_CODE — must precede owb_ioctl.h
+
+#include "stream_pipeline.h"
+
+#include "iaudio_source.h"
+#include "a2dp_stream.h"
+#include "codec_interface.h"
+#include "codec_factory.h"
+#include "owb_ioctl.h"
+#include "owb_log.h"
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+namespace owb {
+
+namespace {
+constexpr size_t kReadSamples   = 4096;   // interleaved int16 pulled per cycle
+constexpr size_t kOutBytes      = 8192;   // per-frame encode scratch
+constexpr size_t kBlobFeedMax   = 2048;   // cap for codecs that drain the whole buffer
+constexpr size_t kAccumHardCap  = 1u << 18;
+constexpr auto   kIdleSleep     = std::chrono::milliseconds(5);
+constexpr auto   kReopenSleep   = std::chrono::milliseconds(50);
+constexpr int64_t kSbcModeMono  = 0;
+
+// Reduce interleaved PCM of arbitrary channel count to stereo interleaved.
+void to_stereo(const int16_t* src, size_t frames, int channels,
+               std::vector<int16_t>& dst) {
+    if (channels == 2) {
+        dst.insert(dst.end(), src, src + frames * 2);
+        return;
+    }
+    for (size_t f = 0; f < frames; ++f) {
+        const int16_t l = src[f * static_cast<size_t>(channels)];
+        const int16_t r = (channels > 1) ? src[f * static_cast<size_t>(channels) + 1] : l;
+        dst.push_back(l);
+        dst.push_back(r);
+    }
+}
+} // namespace
+
+struct StreamPipeline::Impl {
+    IAudioSource*   source;
+    A2dpStream*     sink;
+
+    std::thread           thread;
+    std::atomic<bool>     running{false};
+    std::atomic<bool>     streaming{false};
+    std::atomic<uint32_t> codec_id{OWB_CODEC_SBC};
+
+    mutable std::mutex     codec_mtx;
+    std::unique_ptr<ICodec> codec;      // guarded by codec_mtx
+    std::string            codec_name;  // guarded by codec_mtx
+
+    std::vector<int16_t>   accum;       // stereo interleaved, run()-thread only
+    unsigned long          encode_fail_count = 0;
+
+    Impl(IAudioSource* s, A2dpStream* k)
+        : source(s), sink(k) {}
+
+    void rebuild_codec(uint32_t id) {
+        std::lock_guard<std::mutex> lock(codec_mtx);
+        uint32_t selected = id;
+        auto candidate = CodecFactory::create(id);
+        if (!candidate) {
+            OWB_LOG_ERROR("CodecFactory::create returned null for codec_id %u", id);
+            candidate = CodecFactory::create(OWB_CODEC_SBC);
+            selected = OWB_CODEC_SBC;
+        } else {
+            OWB_LOG_INFO("Codec created: id=%u, name=%.*s", id,
+                         static_cast<int>(candidate->name().size()), candidate->name().data());
+        }
+        codec = std::move(candidate);
+        if (codec && source) {
+            codec->set_param({"freq", source->sample_rate()});
+        }
+        codec_name = codec ? std::string(codec->name()) : std::string();
+        codec_id   = codec ? selected : OWB_CODEC_SBC;
+    }
+
+    // The pipeline always feeds stereo PCM at the capture rate, so a codec
+    // reconfigured to another rate or to mono would play back garbled.
+    bool pipeline_can_feed(std::string_view key, int64_t value) const {
+        if (key == "freq") {
+            return !source || value == source->sample_rate();
+        }
+        if (key == "mode") return value != kSbcModeMono;
+        return true;
+    }
+
+    bool set_param(std::string_view key, int64_t value) {
+        if (!pipeline_can_feed(key, value)) return false;
+        std::lock_guard<std::mutex> lock(codec_mtx);
+        return codec && codec->set_param({key, value});
+    }
+
+    uint32_t bitrate() const {
+        std::lock_guard<std::mutex> lock(codec_mtx);
+        if (!codec) return 0;
+        const std::optional<int64_t> bps = codec->get_param("bitrate");
+        return (bps && *bps > 0) ? static_cast<uint32_t>(*bps) : 0u;
+    }
+
+    void drain(std::vector<uint8_t>& out) {
+        std::lock_guard<std::mutex> lock(codec_mtx);
+        if (!codec) return;
+        const uint32_t id = codec_id.load();
+        const int fs = codec->input_frame_samples();
+        size_t consumed = 0;
+
+        if (fs > 0) {
+            const size_t frame = static_cast<size_t>(fs);
+            while (accum.size() >= frame) {
+                const std::ptrdiff_t n = codec->encode(
+                    std::span<const int16_t>(accum.data(), frame),
+                    std::span<uint8_t>(out.data(), out.size()));
+                if (n > 0) {
+                    sink->send_frame(id, std::span<const uint8_t>(
+                        out.data(), static_cast<size_t>(n)));
+                    streaming = true;
+                } else {
+                    encode_fail_count += 1;
+                    if (encode_fail_count == 1 || encode_fail_count % 500 == 0) {
+                        OWB_LOG_WARN(
+                            "codec->encode returned %lld (count: %lu)",
+                            static_cast<long long>(n),
+                            encode_fail_count);
+                    }
+                }
+                // Consume the frame even when the codec is buffering or errors;
+                // retaining it would indefinitely retry the same input.
+                consumed += frame;
+            }
+        } else {
+            // fs == 0: codec drains a bounded, block-aligned chunk (aptX
+            // processes 4 stereo frames = 8 samples per block).
+            consumed = std::min(accum.size(), kBlobFeedMax);
+            consumed -= (consumed % 8);
+            if (consumed == 0) return;
+            const std::ptrdiff_t n = codec->encode(
+                std::span<const int16_t>(accum.data(), consumed),
+                std::span<uint8_t>(out.data(), out.size()));
+            if (n > 0) {
+                sink->send_frame(id, std::span<const uint8_t>(
+                    out.data(), static_cast<size_t>(n)));
+                streaming = true;
+            }
+        }
+
+        // Remove consumed samples once, keeping the vector small and avoiding
+        // quadratic erase-from-front behaviour in the audio callback.
+        if (consumed > 0) {
+            accum.erase(accum.begin(), accum.begin() + static_cast<std::ptrdiff_t>(consumed));
+        }
+    }
+
+    void run() {
+        OWB_LOG_INFO("StreamPipeline::Impl::run() starting");
+        std::vector<int16_t> read_buf(kReadSamples);
+        std::vector<int16_t> stereo;
+        std::vector<uint8_t> out(kOutBytes);
+        
+        bool first_frame_logged = false;
+        unsigned long reopen_attempt = 0;
+
+        while (running.load()) {
+            if (!sink->is_open() && !sink->open()) {
+                streaming = false;
+                reopen_attempt++;
+                if (reopen_attempt == 1 || reopen_attempt % 200 == 0) {
+                    OWB_LOG_WARN("Sink failed to open (attempt %lu)", reopen_attempt);
+                }
+                std::this_thread::sleep_for(kReopenSleep);
+                continue;
+            }
+            
+            reopen_attempt = 0;
+
+            const std::ptrdiff_t frames = source->read(
+                std::span<int16_t>(read_buf.data(), read_buf.size()));
+            if (frames > static_cast<std::ptrdiff_t>(read_buf.size())) {
+                OWB_LOG_ERROR("Audio source returned an invalid frame count: %lld",
+                              static_cast<long long>(frames));
+                streaming = false;
+                continue;
+            }
+            const int channels = source->channels();
+            if (channels <= 0 || static_cast<size_t>(channels) > read_buf.size() ||
+                static_cast<size_t>(frames) > read_buf.size() / static_cast<size_t>(channels)) {
+                OWB_LOG_ERROR("Audio source returned invalid channels/frame count: ch=%d frames=%lld",
+                              channels, static_cast<long long>(frames));
+                streaming = false;
+                continue;
+            }
+            if (frames <= 0) {
+                std::this_thread::sleep_for(kIdleSleep);
+                continue;
+            }
+            
+            if (!first_frame_logged) {
+                OWB_LOG_INFO("First audio frames received: %lld frames", (long long)frames);
+                first_frame_logged = true;
+            }
+
+            stereo.clear();
+            to_stereo(read_buf.data(), static_cast<size_t>(frames),
+                      channels, stereo);
+
+            accum.insert(accum.end(), stereo.begin(), stereo.end());
+            if (accum.size() > kAccumHardCap) {
+                OWB_LOG_WARN("Accumulator overflow, clearing buffer (size: %zu)", accum.size());
+                accum.clear();
+            }
+
+            drain(out);
+        }
+        streaming = false;
+    }
+};
+
+StreamPipeline::StreamPipeline(IAudioSource* source, A2dpStream* sink)
+    : impl_(std::make_unique<Impl>(source, sink)) {
+    impl_->rebuild_codec(OWB_CODEC_SBC);
+}
+
+StreamPipeline::~StreamPipeline() { stop(); }
+
+bool StreamPipeline::start() {
+    if (impl_->running.load()) return true;
+    if (!impl_->source) {
+        OWB_LOG_WARN("StreamPipeline::start() called but no audio source available");
+        return false;
+    }
+    OWB_LOG_INFO("StreamPipeline starting");
+    impl_->running = true;
+    impl_->thread  = std::thread([this] { impl_->run(); });
+    return true;
+}
+
+void StreamPipeline::stop() {
+    if (!impl_->running.exchange(false)) return;
+    OWB_LOG_INFO("StreamPipeline stopping");
+    if (impl_->thread.joinable()) impl_->thread.join();
+    impl_->streaming = false;
+}
+
+void StreamPipeline::set_codec_id(uint32_t codec_id) {
+    impl_->rebuild_codec(codec_id);
+}
+
+bool StreamPipeline::set_codec_param(std::string_view key, int64_t value) {
+    return impl_->set_param(key, value);
+}
+
+uint32_t StreamPipeline::bitrate() const {
+    return impl_->bitrate();
+}
+
+uint32_t StreamPipeline::codec_id() const noexcept {
+    return impl_->codec_id.load();
+}
+
+std::string StreamPipeline::codec_name() const {
+    std::lock_guard<std::mutex> lock(impl_->codec_mtx);
+    return impl_->codec_name;
+}
+
+bool StreamPipeline::is_streaming() const noexcept {
+    return impl_->streaming.load();
+}
+
+} // namespace owb

@@ -8,8 +8,9 @@
 - Separate capability/configuration/negotiated/observed/verified fields.
 - Optional elevated ETW observation with explicit evidence labels.
 - Diagnostics with actionable findings, redacted export, local settings.
-- Codec preference controls through validated advanced providers; the in-box stack
-  still has no supported preference API.
+- Narrow AAC/aptX Classic preference through the explicitly consented BthA2dp value.
+- Codec preference controls through validated advanced providers, including an
+  optional in-repo native backend.
 
 ## v0.2 — validation and polish
 
@@ -19,6 +20,7 @@
 - Add optional `WPR`/ETL import for user-supplied independent verification.
 - Add JSON schema version and export verification tests.
 - Native Windows notifications (opt-in, local only).
+- Hardware validation of the native A2DP provider on representative Windows radios.
 
 ## v0.3 — optional advanced backends
 

@@ -66,6 +66,7 @@ impl AudioBackend for DemoBackend {
             configure_preferred_codec: true,
             configure_codec_parameters: true,
             configure_endpoint_format: false,
+            configure_inbox_codec_toggle: true,
             supported_operations: vec![
                 bluu_core::ConfigOperation::SetPreferredCodec,
                 bluu_core::ConfigOperation::SetCodecPriority,
@@ -222,6 +223,14 @@ impl AudioBackend for DemoBackend {
                 .into(),
         );
         snapshot.providers = demo_provider();
+        snapshot.inbox_codec = bluu_core::model::InboxCodecToggle {
+            supported: true,
+            aac_enabled: Some(true),
+            registry_path:
+                r"HKLM\SYSTEM\CurrentControlSet\Services\BthA2dp\Parameters\BluetoothAacEnable"
+                    .into(),
+            note: "DEMO only. This does not read the real BthA2dp service parameter.".into(),
+        };
         Ok(snapshot)
     }
 

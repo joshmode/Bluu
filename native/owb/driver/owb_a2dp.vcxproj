@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OpenWinBlue A2DP KMDF Driver — MSBuild project -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B4D5E6F7-A8B9-4C5D-8E9F-0A1B2C3D4E5F}</ProjectGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ProjectName>owb_a2dp</ProjectName>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Debug'">
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Release'">
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
+  <PropertyGroup Label="UserMacros" />
+
+  <!-- OutDir is anchored to ProjectDir (not SolutionDir): the driver is built as a
+       standalone vcxproj in CI where $(SolutionDir) is undefined. This keeps the
+       output at driver\x64\Debug\owb_a2dp.sys, which the CI verify step expects. -->
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)$(Platform)\$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>
+        $(ProjectDir)src;$(ProjectDir);%(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <WarningLevel>Level4</WarningLevel>
+    </ClCompile>
+    <Inf>
+      <OutputDirectory>$(OutDir)</OutputDirectory>
+    </Inf>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\owb_a2dp.c" />
+    <ClCompile Include="src\avdtp.c" />
+    <ClCompile Include="src\avdtp_packets.c" />
+    <ClCompile Include="src\l2cap_stream.c" />
+    <ClCompile Include="src\ioctl.c" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="src\owb_a2dp.h" />
+    <ClInclude Include="src\avdtp.h" />
+    <ClInclude Include="src\avdtp_packets.h" />
+    <ClInclude Include="src\l2cap_stream.h" />
+    <ClInclude Include="src\ioctl.h" />
+    <ClInclude Include="owb_ioctl.h" />
+    <ClInclude Include="owb_codec_ids.h" />
+  </ItemGroup>
+
+  <!-- INF excluded from project build: InfVerif.dll is absent from the chocolatey WDK
+       package used in CI. The INF is deployed via the installer (Phase 4).
+       To validate the INF locally: run InfVerif.exe manually from a full WDK install. -->
+  <!--
+  <ItemGroup>
+    <Inf Include="owb_a2dp.inf" />
+  </ItemGroup>
+  -->
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+
+</Project>

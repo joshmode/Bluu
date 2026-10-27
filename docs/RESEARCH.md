@@ -100,7 +100,8 @@ preferred A2DP codec, priority, SBC bitpool, AAC bitrate, aptX mode, or LDAC
 quality. Registry values circulating on the internet (for example
 `BthA2dp\Parameters`) are **undocumented and version-sensitive**. A value such as
 `BluetoothAacEnable` may work on a particular build, but it is not a supported codec
-preference contract and is not used by Bluu.
+preference contract. Bluu exposes only this one value, after explicit consent, with a
+saved prior value and a restore action; it cannot register additional codecs.
 
 Evidence: documented API absence plus **unverified** third-party registry anecdotes
 and the official Windows codec table. Confidence: high that no supported
@@ -128,18 +129,20 @@ codec selection.
 | SBC | Natively supported | In-box A2DP | Required | No public preference | Windows supplies it | A2DP specification | High |
 | AAC | Natively supported | Win11 21H2+ | Required | No public preference | Windows supplies it | In-box; not redistributed | High |
 | aptX Classic | Natively supported | Win10 1507+/Win11 | Required | No public preference | Windows supplies vendor path | Qualcomm licensed | High |
-| aptX HD | Requires substantial system integration | Not in-box | Required | None | Replacement/vendor A2DP stack | Qualcomm licence + driver signing | High |
+| aptX HD | Conditionally implementable | Not in-box | Required | Native/provider parameters | Replacement/vendor A2DP stack; optional Bluu native provider | Qualcomm licence + driver signing | Medium |
 | aptX Adaptive | Conditionally implementable | Win11 24H2 only on select Qualcomm radios | Required | OEM/radio dependent | Licensed Qualcomm integration | Qualcomm confidential/licensed | High |
 | aptX Lossless | Not feasible safely for generic PCs | Only the conditional 24H2 OEM listing | Required | None | Vendor/hardware coupled | Qualcomm licensed | Medium |
-| LDAC | Requires substantial system integration | Not in-box | Required | No supported registry key | Source implementation + A2DP stack | Sony states a licence is required to implement; trademark/patent review | High |
+| LDAC | Conditionally implementable | Not in-box | Required | Native/provider parameters | Source implementation + A2DP stack; optional Bluu native provider | Sony licence/trademark/patent review | Medium |
 | LC3 / LE Audio | Requires substantial system integration | Win11 22H2+ vendor ACX/VSAP | PACS/BAP required | No app-level registration | ACX/VSAP + ISO transport; LC3 may be offloaded | Bluetooth SIG spec; implementation/patent review | High |
 | MP3 | Not feasible on this backend | Standard A2DP ID, not in-box table | Required | None | Needs vendor stack | Patent/licensing review required | Medium |
 
 ### Codec implementation does not equal transport support
 
-`libopenaptx` is a GPLv3+ encoder/decoder, not an A2DP stack. AOSP libldac is a
-codec implementation; it is not a Windows profile driver. LC3 encoders similarly do
-not create an ACX/VSAP audio endpoint. Bluu does not bundle any of these binaries.
+The FFmpeg-derived aptX core is an encoder implementation, not an A2DP stack. AOSP
+libldac is likewise a codec implementation, not a Windows profile driver. LC3
+encoders do not create an ACX/VSAP audio endpoint. The optional native provider
+supplies the missing transport, but no advanced codec is claimed as active until the
+driver and hardware path are validated.
 
 ### Decode vs encode
 
@@ -159,8 +162,8 @@ external solution, but it is not “unlocking” the in-box stack.
 | `PKEY_AudioEngine_DeviceFormat` | Public/documented read | Stored shared-mode format |
 | `PKEY_AudioEngine_DeviceFormat` write | Not a supported configuration contract | Not used |
 | `Microsoft-Windows-Bluetooth-BthA2dp` ETW | Documented provider, non-contract event payload | Elevated observation only |
-| `BthA2dp\Parameters` registry values | Undocumented/version-specific | Not used |
-| Replacement A2DP kernel driver | Driver signing, Secure Boot, kernel safety burden | Not shipped |
+| `BthA2dp\Parameters\BluetoothAacEnable` | Undocumented/version-specific | One opt-in AAC/aptX Classic preference, backed up |
+| Replacement A2DP kernel driver | Driver signing, Secure Boot, kernel safety burden | Optional experimental provider, never silent |
 | LE Audio ACX/VSAP | Documented for IHVs, not app-level registration | Diagnostic only |
 
 ## 4. Architecture alternatives
@@ -168,9 +171,9 @@ external solution, but it is not “unlocking” the in-box stack.
 ### A. Native Windows integration (chosen)
 
 Use WinRT/Core Audio for read-only inventory and a short ETW helper for observation.
-Pros: standard-user UI, no driver, no registry writes, no service, low maintenance,
-clear failure modes. Cons: cannot set a codec preference; advanced codecs remain
-unavailable on generic hardware.
+Pros: standard-user UI, no driver, no service, low maintenance, clear failure modes.
+The one narrow AAC/aptX Classic value is opt-in and reversible. Cons: it cannot
+register advanced codecs; those remain unavailable on generic hardware.
 
 ### B. Optional codec integration layer
 
@@ -184,8 +187,9 @@ architecture remains a documented extension point rather than a shipped claim.
 Replace the in-box A2DP path with a signed kernel driver or alternate Bluetooth
 stack. This is technically possible for specialist vendors, but requires kernel
 development, attestation/signing, Secure Boot-compatible distribution, recovery
-tooling, and extensive audio/radio validation. It is not a default, and Bluu does not
-bundle or install such a component.
+tooling, and extensive audio/radio validation. It is not a default. Bluu includes an
+optional, experimental implementation derived from OpenWinBlue for explicit testing;
+it has not been hardware-validated or production-signed in this repository.
 
 ## 5. Recommended architecture
 

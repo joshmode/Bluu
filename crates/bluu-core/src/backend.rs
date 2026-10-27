@@ -3,7 +3,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    CaptureOutcome, CaptureRequest, ProviderOperationOutcome, ProviderOperationRequest, Snapshot,
+    CaptureOutcome, CaptureRequest, InboxCodecChange, InboxCodecToggle, ProviderOperationOutcome,
+    ProviderOperationRequest, Snapshot,
 };
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -27,6 +28,7 @@ pub struct BackendCapabilities {
     pub configure_preferred_codec: bool,
     pub configure_codec_parameters: bool,
     pub configure_endpoint_format: bool,
+    pub configure_inbox_codec_toggle: bool,
     pub supported_operations: Vec<ConfigOperation>,
 }
 
@@ -121,6 +123,26 @@ pub trait AudioBackend: Send {
     ) -> Result<ProviderOperationOutcome, BackendError> {
         Err(BackendError::Unsupported(
             "advanced codec providers are not supported by this backend".into(),
+        ))
+    }
+
+    fn inbox_codec_toggle(&mut self) -> Result<InboxCodecToggle, BackendError> {
+        Ok(InboxCodecToggle::default())
+    }
+
+    fn set_inbox_codec_toggle(
+        &mut self,
+        _aac_enabled: bool,
+        _dry_run: bool,
+    ) -> Result<InboxCodecChange, BackendError> {
+        Err(BackendError::Unsupported(
+            "Windows in-box codec toggling is not supported by this backend".into(),
+        ))
+    }
+
+    fn restore_inbox_codec_toggle(&mut self) -> Result<InboxCodecChange, BackendError> {
+        Err(BackendError::Unsupported(
+            "restoring the Windows in-box codec preference is not supported by this backend".into(),
         ))
     }
 }

@@ -75,6 +75,9 @@ impl Settings {
     pub fn load_or_default(path: &Path) -> Result<Self, SettingsError> {
         match fs::read(path) {
             Ok(bytes) => {
+                if bytes.len() > 64 * 1024 {
+                    return Err(SettingsError::Parse("settings file exceeds 64 KiB".into()));
+                }
                 let settings: Self = serde_json::from_slice(&bytes)
                     .map_err(|e| SettingsError::Parse(e.to_string()))?;
                 settings.validate()?;
@@ -176,5 +179,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let loaded = Settings::load_or_default(&dir.path().join("none.json")).unwrap();
         assert_eq!(loaded.theme, ThemePreference::Dark);
+    }
+
+    #[test]
+    fn oversized_settings_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, vec![b' '; 64 * 1024 + 1]).unwrap();
+        assert!(matches!(
+            Settings::load_or_default(&path),
+            Err(SettingsError::Parse(_))
+        ));
     }
 }

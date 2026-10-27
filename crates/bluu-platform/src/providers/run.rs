@@ -222,11 +222,12 @@ fn run_elevated(exe: &Path, params: &str, timeout: Duration) -> Result<(), Backe
         let wait = WaitForSingleObject(info.hProcess, timeout.as_millis() as u32);
         let mut exit_code = 0u32;
         let exit_ok = GetExitCodeProcess(info.hProcess, &mut exit_code).is_ok();
-        let _ = CloseHandle(info.hProcess);
         if wait.0 != 0 {
             let _ = TerminateProcess(info.hProcess, 1);
+            let _ = CloseHandle(info.hProcess);
             return Err(BackendError::Provider("elevated provider timed out".into()));
         }
+        let _ = CloseHandle(info.hProcess);
         if exit_ok && exit_code != 0 {
             return Err(BackendError::Provider(format!(
                 "elevated provider exited with code {exit_code}"

@@ -90,7 +90,8 @@ rules accept it.
 - API version must be 1.
 - Provider ID: letters/digits/`.`/`-`/`_`, max 96.
 - Executable must be relative and contained.
-- No duplicate codecs or parameter keys.
+- No duplicate codecs. Parameter keys must be globally unique across codecs because
+  the preference map is flat; use codec-qualified keys such as `ldac_frequency`.
 - Priority requires at least two codecs.
 - Parameter defaults must be valid and values must be validated on apply.
 - Unknown codecs are rejected.
@@ -112,6 +113,13 @@ Build it, copy its manifest/executable into a provider directory, then run:
 ```bash
 BLUU_PROVIDER_DIR=<dir> cargo run -p bluu-platform --bin providers-smoke
 ```
+
+## Native provider
+
+`providers/bluu-native-a2dp` is the optional in-repo adapter for the experimental
+native driver/service. Its parameter keys are `ldac_quality`, `ldac_frequency`,
+`aptx_hd_frequency`, and `aptx_frequency`. It reports driver state as
+provider-attested, never as independent verification.
 
 ## Installation in the UI
 

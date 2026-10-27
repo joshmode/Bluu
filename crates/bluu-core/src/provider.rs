@@ -456,7 +456,7 @@ pub fn validate_manifest(manifest: &ProviderManifest) -> Result<(), ProviderVali
             }
             if !parameters.insert(parameter.key().to_string()) {
                 return Err(ProviderValidationError::Manifest(format!(
-                    "duplicate parameter key '{}'",
+                    "duplicate parameter key '{}'; parameter keys must be unique across codecs (use codec-qualified keys)",
                     parameter.key()
                 )));
             }
@@ -784,6 +784,19 @@ mod tests {
         assert!(validate_manifest(&m).is_err());
         let mut m = manifest();
         m.codecs.push(m.codecs[0].clone());
+        assert!(validate_manifest(&m).is_err());
+    }
+
+    #[test]
+    fn manifest_rejects_ambiguous_parameter_keys_across_codecs() {
+        let mut m = manifest();
+        m.codecs[1].parameters = vec![ProviderParameter::Choice {
+            key: "ldac_quality".into(),
+            label: "Ambiguous".into(),
+            options: vec!["1".into()],
+            default: "1".into(),
+            note: String::new(),
+        }];
         assert!(validate_manifest(&m).is_err());
     }
 

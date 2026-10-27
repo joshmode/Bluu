@@ -2,19 +2,23 @@
 
 ## Project licence
 
-Bluu is dual-licensed under **MIT OR Apache-2.0**. This is a permissive,
-OSI-approved combination suitable for broad open-source and commercial use. The
-repository includes both `LICENSE-MIT` and `LICENSE-APACHE`.
+Bluu is licensed under **GPL-3.0-or-later**. The full licence text is in
+`LICENSE`.
+
+The software and the vendored native A2DP component are distributed under GPLv3.
+This is required by the OpenWinBlue-derived driver/service code and keeps the
+combined work compatible with its upstream terms. The Rust-only core could be
+licensed more permissively, but distributing the complete product under one clear
+copyleft licence avoids ambiguous mixed-licence packaging.
 
 This choice is not legal advice. A maintainer should review it before release.
 
 ## Dependency policy
 
-- Prefer permissive licences (MIT, Apache-2.0, BSD, ISC, Zlib).
+- Preserve the licence of every vendored component.
 - CI runs `cargo-deny` with a licence allow-list and advisory checks.
-- No proprietary codec binaries are bundled.
-- No codec SDKs, Qualcomm binaries, Sony LDAC binaries, or driver binaries are
-  redistributed without verified rights.
+- No proprietary Qualcomm or Sony binaries are bundled.
+- No codec SDK or driver binary is redistributed without verified rights.
 
 ## Codec-specific notes
 
@@ -22,12 +26,17 @@ This choice is not legal advice. A maintainer should review it before release.
 |---|---|
 | SBC | A2DP specification; no proprietary binary bundled |
 | AAC | Windows supplies in-box; not redistributed |
-| aptX / aptX HD / Adaptive / Lossless | Qualcomm technology/licence; no binary bundled |
-| LDAC | Sony states licence required to implement; no binary bundled |
-| LC3 | Bluetooth SIG spec; implementation may carry patent/licence obligations; no binary bundled |
+| aptX / aptX HD | FFmpeg's LGPL-2.1-or-later codec core is vendored and statically linked into the optional native service; the combined distributed service is covered by the project's GPLv3 distribution. Qualcomm trademark/patent obligations are not waived by the LGPL. |
+| aptX Adaptive / Lossless | Not implemented; no proprietary binary bundled |
+| LDAC | The AOSP-derived libldac encoder (Apache-2.0) is vendored. Sony's licence/patent position and trademark use still require review before redistribution. |
+| LC3 / LE Audio | Not included; separate Bluetooth SIG/patent review required |
 | MP3 | Patent/licensing review required; not targeted |
-| libopenaptx | GPLv3+ if ever used; not currently a dependency |
-| AOSP libldac | Not currently a dependency; licence alone does not grant all implementation rights |
+| libsbc | LGPL-2.1-or-later; vendored source and notices included |
+| FFmpeg aptX core | LGPL-2.1-or-later; only the self-contained codec core is vendored |
+| AOSP libldac | Apache-2.0; vendored source and notices included |
+
+`libopenaptx` was **not** retained because its README adds non-OSI restrictions
+beyond the GPL text. The aptX encoder used by Bluu is the FFmpeg-derived LGPL core.
 
 ## Trademarks
 
@@ -43,7 +52,9 @@ Release artifacts must include:
 - egui/eframe and font licences (default fonts bundle Ubuntu/Hack/Noto assets under
   their respective licences);
 - Windows crate licence (MIT/Apache-2.0);
-- a notice that no proprietary codec binary is included.
+- a notice that no proprietary Qualcomm/Sony codec binary is included;
+- the upstream OpenWinBlue attribution and GPLv3 text;
+- the FFmpeg aptX, libsbc, and libldac notices.
 
 `packaging/THIRD-PARTY-NOTICES.md` is the release checklist; generate the final file
 from `Cargo.lock` at release time.

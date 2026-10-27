@@ -29,9 +29,9 @@ inventory/diagnostics/verification.
    driver, service, or arbitrary-command path.
 6. Codec facts are typed by evidence. A supported inventory item cannot be rendered
    as active. An ETW observation without a device identity is `ActiveUnverified`.
-7. No codec preference or configuration control is shown in v0.1.0 because no
-   backend capability supports it. The backend capability flags are the source of
-   truth for future UI.
+7. In-box configuration is limited to the explicitly consented, backed-up BthA2dp
+   AAC value. The native optional provider adds a separately installed replacement
+   A2DP path behind the same capability/evidence model.
 
 ### Consequences
 
@@ -118,9 +118,9 @@ silently converted into “unsupported hardware.”
 - Helper input is a small parsed argument set; no shell interpolation of arbitrary
   commands. The path is passed as a quoted parameter to ShellExecuteExW.
 - Temp result path is app-generated under the user's temp directory.
-- The UI itself does not install a driver/service or write the registry. Advanced
-  providers are separate packages; any driver/service install is performed by the
-  provider publisher with explicit user consent.
+- The UI itself does not install a driver/service. The only registry write is the
+  narrow BthA2dp AAC preference through the helper. Driver/service installation is a
+  separate explicit action under the native provider's installer.
 - No telemetry or network code.
 - Diagnostics are local JSON, redacted by default.
 

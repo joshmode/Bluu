@@ -1,0 +1,82 @@
+{
+  "api_version": 1,
+  "id": "bluu.native-a2dp",
+  "name": "Bluu Native A2DP (LDAC / aptX HD)",
+  "version": "0.4.0",
+  "executable": "bluu-provider-owb.exe",
+  "publisher": "Bluu / OpenWinBlue contributors",
+  "homepage": "https://github.com/joshmode/Bluu",
+  "description": "Adapter for the optional GPLv3 native A2DP driver and codec service.",
+  "requires_elevation": true,
+  "stack": "replacement_a2dp_driver",
+  "capabilities": {
+    "preferred_codec": true,
+    "priority": false,
+    "parameters": true,
+    "active_codec": true,
+    "rollback": true,
+    "dry_run": false
+  },
+  "codecs": [
+    {
+      "codec": "ldac",
+      "notes": "Requires a Sony-compatible LDAC sink and the native driver/service.",
+      "hardware_validated": false,
+      "remote_validated": false,
+      "parameters": [
+        {
+          "kind": "choice",
+          "key": "ldac_quality",
+          "label": "LDAC quality",
+          "options": ["330", "660", "990"],
+          "default": "990",
+          "note": "Maps to LDAC EQMID MQ/SQ/HQ."
+        },
+        {
+          "kind": "choice",
+          "key": "ldac_frequency",
+          "label": "Sample rate",
+          "options": ["44100", "48000"],
+          "default": "44100",
+          "note": "Must match the active WASAPI capture rate."
+        }
+      ]
+    },
+    {
+      "codec": "aptx_hd",
+      "notes": "FFmpeg LGPL aptX core; requires aptX HD-capable remote hardware.",
+      "hardware_validated": false,
+      "remote_validated": false,
+      "parameters": [
+        {
+          "kind": "choice",
+          "key": "aptx_hd_frequency",
+          "label": "Sample rate",
+          "options": ["44100", "48000"],
+          "default": "44100"
+        }
+      ]
+    },
+    {
+      "codec": "aptx",
+      "notes": "aptX Classic via the FFmpeg LGPL aptX core.",
+      "hardware_validated": false,
+      "remote_validated": false,
+      "parameters": [
+        {
+          "kind": "choice",
+          "key": "aptx_frequency",
+          "label": "Sample rate",
+          "options": ["44100", "48000"],
+          "default": "44100"
+        }
+      ]
+    },
+    {
+      "codec": "sbc",
+      "notes": "Fallback",
+      "hardware_validated": true,
+      "remote_validated": true
+    }
+  ]
+}

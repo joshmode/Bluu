@@ -1,8 +1,8 @@
-use std::{ffi::c_void, mem::size_of, path::Path, time::Instant};
+use std::{ffi::c_void, mem::size_of, path::Path};
 
 use bluu_core::{
     backend::BackendError,
-    model::{CaptureOutcome, CaptureRequest},
+    model::{CaptureOutcome, CaptureRequest, InboxCodecChange},
 };
 use windows::core::PCWSTR;
 use windows::Win32::{
@@ -53,7 +53,7 @@ pub fn capture(request: &CaptureRequest) -> Result<CaptureOutcome, BackendError>
     let params = format!(
         "--etw-helper --seconds {} --result-file {}",
         request.duration_seconds.clamp(5, 120),
-        temp.display()
+        windows_quote(&temp)
     );
     run_elevated(&exe, &params).inspect_err(|_e| {
         let _ = std::fs::remove_file(&temp);
@@ -111,20 +111,14 @@ fn run_elevated(exe: &Path, params: &str) -> Result<(), BackendError> {
                 "Windows did not return a process handle for the ETW helper".into(),
             ));
         }
-        let started = Instant::now();
         let wait = WaitForSingleObject(info.hProcess, 150_000);
-        let _ = CloseHandle(info.hProcess);
         if wait.0 != 0 {
+            let _ = CloseHandle(info.hProcess);
             return Err(BackendError::HelperStart(
                 "the ETW helper did not finish within 150 seconds".into(),
             ));
         }
-        if started.elapsed() < std::time::Duration::from_secs(1) {
-            return Err(BackendError::ElevationRequired(
-                "the helper exited immediately; elevation may have been cancelled or the trace could not start"
-                    .into(),
-            ));
-        }
+        let _ = CloseHandle(info.hProcess);
     }
     Ok(())
 }
@@ -154,4 +148,113 @@ fn helper_path() -> Result<std::path::PathBuf, BackendError> {
         "the helper is not next to the application ({})",
         dir.display()
     )))
+}
+
+pub fn set_inbox_codec(aac_enabled: bool, dry_run: bool) -> Result<InboxCodecChange, BackendError> {
+    if dry_run {
+        return super::codec_toggle::preview_toggle(aac_enabled);
+    }
+    let exe = helper_path()?;
+    let temp = std::env::temp_dir().join(format!(
+        "bluu-aac-{}-{}.json",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    ));
+    let params = format!(
+        "--aac-helper --set-aac {} --result-file {}",
+        u8::from(aac_enabled),
+        windows_quote(&temp)
+    );
+    run_aac_helper(&exe, &params, &temp)
+}
+
+pub fn restore_inbox_codec() -> Result<InboxCodecChange, BackendError> {
+    let exe = helper_path()?;
+    let temp = std::env::temp_dir().join(format!(
+        "bluu-aac-{}-{}.json",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    ));
+    let params = format!(
+        "--aac-helper --restore-aac --result-file {}",
+        windows_quote(&temp)
+    );
+    run_aac_helper(&exe, &params, &temp)
+}
+
+fn run_aac_helper(
+    exe: &Path,
+    params: &str,
+    result_path: &Path,
+) -> Result<InboxCodecChange, BackendError> {
+    run_elevated(exe, params).inspect_err(|_| {
+        let _ = std::fs::remove_file(result_path);
+    })?;
+    let metadata = std::fs::metadata(result_path).map_err(|e| {
+        BackendError::HelperStart(format!("AAC helper produced no result file: {e}"))
+    })?;
+    if metadata.len() > 16 * 1024 {
+        let _ = std::fs::remove_file(result_path);
+        return Err(BackendError::HelperStart(
+            "AAC helper result was unexpectedly large and was rejected".into(),
+        ));
+    }
+    let bytes = std::fs::read(result_path).map_err(|e| {
+        BackendError::HelperStart(format!("AAC helper result could not be read: {e}"))
+    })?;
+    let _ = std::fs::remove_file(result_path);
+    let result: AacHelperResult = serde_json::from_slice(&bytes)
+        .map_err(|e| BackendError::HelperStart(format!("invalid AAC helper result: {e}")))?;
+    if let Some(error) = result.error {
+        return Err(BackendError::HelperStart(error));
+    }
+    if !result.applied {
+        return Err(BackendError::HelperStart(
+            "the AAC helper completed without confirming the change".into(),
+        ));
+    }
+    Ok(InboxCodecChange {
+        previous: result.previous,
+        aac_enabled: result.aac_enabled.or(result.previous),
+        applied: true,
+        requires_reconnect: true,
+        message: result.message,
+    })
+}
+
+fn windows_quote(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    if !value.is_empty() && !value.chars().any(|c| c.is_whitespace() || c == '"') {
+        return value.into();
+    }
+    let mut out = String::from("\"");
+    let mut backslashes = 0;
+    for ch in value.chars() {
+        match ch {
+            '\\' => backslashes += 1,
+            '"' => {
+                out.push_str(&"\\".repeat(backslashes * 2 + 1));
+                out.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                out.push_str(&"\\".repeat(backslashes));
+                backslashes = 0;
+                out.push(ch);
+            }
+        }
+    }
+    out.push_str(&"\\".repeat(backslashes * 2));
+    out.push('"');
+    out
+}
+
+#[derive(serde::Deserialize)]
+struct AacHelperResult {
+    applied: bool,
+    previous: Option<bool>,
+    #[serde(default)]
+    aac_enabled: Option<bool>,
+    message: String,
+    error: Option<String>,
 }

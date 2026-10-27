@@ -14,7 +14,8 @@ Status: code targets documented APIs; hardware validation pending.
 | aptX Adaptive | No | No | No | Select Qualcomm devices | OEM-specific |
 | LE Audio | No | 22H2+ vendor path | Vendor path | Vendor path | ACX/VSAP |
 | Shared-mode codec preference | No supported in-box API | No supported in-box API | No supported in-box API | No supported in-box API | Provider-gated advanced path |
-| LDAC / aptX HD via provider | Provider-dependent | Provider-dependent | Provider-dependent | Provider-dependent | Requires installed provider + capable hardware |
+| LDAC / aptX HD via native provider | Experimental | Experimental | Experimental | Experimental | Requires capable remote, test-signed/attested driver, and hardware validation |
+| BthA2dp AAC toggle | Not offered | Build-sensitive | Build-sensitive | Build-sensitive | Undocumented; backup, consent, reconnect |
 
 ## Architecture support
 

@@ -122,6 +122,102 @@ fn section_heading(ui: &mut Ui, title: &str, trailing: Option<&str>) {
     ui.add_space(8.0);
 }
 
+fn inbox_codec_card(app: &mut BluuApp, ui: &mut Ui) {
+    let Some(snapshot) = app.snapshot.as_ref() else {
+        return;
+    };
+    let toggle = snapshot.inbox_codec.clone();
+    if !toggle.supported || !snapshot.system.is_windows_11() {
+        return;
+    }
+    theme::subtle_panel().show(ui, |ui| {
+        section_heading(
+            ui,
+            "Windows in-box AAC / aptX preference",
+            Some("Undocumented · whole PC"),
+        );
+        ui.label(
+            RichText::new(&toggle.note)
+                .size(10.8)
+                .color(theme::muted()),
+        );
+        ui.add_space(8.0);
+        key_value(
+            ui,
+            "AAC preference",
+            match toggle.aac_enabled {
+                Some(true) => "Enabled",
+                Some(false) => "Disabled",
+                None => "Absent (Windows default)",
+            },
+        );
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(
+                "This BthA2dp service value is build-sensitive and is not a codec-registration API. Disabling AAC can let aptX Classic win on aptX-capable hardware. It cannot enable LDAC, aptX HD, or aptX Adaptive. A change applies to every Bluetooth audio device on this PC and requires reconnection.",
+            )
+            .size(10.8)
+            .color(theme::warn()),
+        );
+        ui.add_space(6.0);
+        if !app.demo {
+            ui.checkbox(
+                &mut app.inbox_codec_consented,
+                "I understand this writes an undocumented HKLM service parameter and affects the whole PC.",
+            );
+        } else {
+            app.inbox_codec_consented = true;
+        }
+        ui.horizontal_wrapped(|ui| {
+            let can_change = !app.inbox_codec_busy && app.inbox_codec_consented;
+            if ui
+                .add_enabled(
+                    !app.inbox_codec_busy,
+                    egui::Button::new("Preview change (no write)"),
+                )
+                .clicked()
+            {
+                app.inbox_codec_change(false, true);
+            }
+            if ui
+                .add_enabled(
+                    can_change,
+                    egui::Button::new("Prefer aptX (disable AAC)").fill(theme::accent_soft()),
+                )
+                .clicked()
+            {
+                app.inbox_codec_change(false, false);
+            }
+            if ui
+                .add_enabled(can_change, egui::Button::new("Re-enable AAC"))
+                .clicked()
+            {
+                app.inbox_codec_change(true, false);
+            }
+            if ui
+                .add_enabled(
+                    can_change && !app.demo,
+                    egui::Button::new("Restore previous value"),
+                )
+                .clicked()
+            {
+                app.restore_inbox_codec();
+            }
+        });
+        ui.add_space(3.0);
+        ui.label(
+            RichText::new(format!("Registry scope: {}", toggle.registry_path))
+                .size(9.8)
+                .color(theme::faint()),
+        );
+        if let Some((ok, message)) = &app.inbox_codec_note {
+            ui.add_space(6.0);
+            notice_banner(ui, *ok, message);
+        }
+    });
+    ui.add_space(14.0);
+}
+
 fn key_value(ui: &mut Ui, key: &str, value: &str) {
     ui.horizontal(|ui| {
         ui.label(RichText::new(key).size(11.5).color(theme::muted()));
@@ -300,6 +396,7 @@ pub fn home(app: &mut BluuApp, ui: &mut Ui) {
         notice_banner(ui, *ok, note);
         ui.add_space(12.0);
     }
+    inbox_codec_card(app, ui);
 
     if let Some(device) = &device {
         ui.columns(2, |columns| {
@@ -385,7 +482,7 @@ pub fn home(app: &mut BluuApp, ui: &mut Ui) {
         section_heading(ui, "What Windows exposes", Some("Capability boundary"));
         ui.label(
             RichText::new(
-                "Bluu reads codec inventory, remote profile records, endpoints and formats. Windows has no documented A2DP preference or codec-registration API, so configuration controls are not shown.",
+                "Bluu reads codec inventory, remote profile records, endpoints and formats. Windows has no documented A2DP codec-registration API. The narrow AAC/aptX Classic preference and the optional native provider are shown separately, with their own safety and evidence labels.",
             )
             .size(12.0)
             .color(theme::muted()),
@@ -396,7 +493,7 @@ pub fn home(app: &mut BluuApp, ui: &mut Ui) {
             pill(ui, "AAC on Windows 11", theme::good());
             pill(ui, "aptX in-box", theme::good());
             pill(ui, "aptX Adaptive: select Qualcomm OEMs / provider", theme::warn());
-            pill(ui, "LDAC / aptX HD: provider-gated", theme::violet());
+            pill(ui, "LDAC / aptX HD: experimental native provider", theme::violet());
             pill(ui, "LE Audio: vendor ACX path", theme::violet());
         });
     });
@@ -735,8 +832,10 @@ pub fn codecs(app: &mut BluuApp, ui: &mut Ui) {
             "No Bluetooth device",
             "Connect a device to inspect codec states.",
         );
+        inbox_codec_card(app, ui);
         return;
     };
+    inbox_codec_card(app, ui);
 
     let active = reports.iter().find(|r| r.state.is_active()).cloned();
     let selected = app
@@ -1310,7 +1409,7 @@ pub fn settings(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
         section_heading(ui, "Safety posture", None);
         ui.horizontal_wrapped(|ui| {
             pill(ui, "Standard user UI", theme::good());
-            pill(ui, "No registry writes", theme::good());
+            pill(ui, "One opt-in HKLM toggle", theme::warn());
             pill(ui, "Provider-gated driver path", theme::warn());
             pill(ui, "No background service", theme::good());
             pill(ui, "No network code", theme::good());
@@ -1318,7 +1417,7 @@ pub fn settings(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
         ui.add_space(8.0);
         ui.label(
             RichText::new(
-                "Bluu's own elevation is limited to the short-lived ETW helper and, for an advanced provider, the provider's separately declared elevation prompt. A provider may install/control a vendor driver or service under its own signed installer and licence.",
+                "Bluu's own elevation is limited to the short-lived helper (ETW or the explicitly requested BthA2dp AAC value) and, for an advanced provider, the provider's separately declared elevation prompt. A provider may install/control a vendor driver or service under its own signed installer and licence.",
             )
             .size(10.8)
             .color(theme::muted()),
@@ -1344,7 +1443,7 @@ pub fn settings(app: &mut BluuApp, ctx: &egui::Context, ui: &mut Ui) {
         ui.add_space(8.0);
         ui.label(
             RichText::new(
-                "Installation: Bluu currently ships as a portable directory with bluu.exe and bluu-etw-helper.exe side by side. No service, driver, or startup entry is installed.",
+                "Installation: Bluu ships as a portable directory with bluu.exe and bluu-etw-helper.exe side by side. The optional native provider is packaged but not installed; a driver/service requires its separate explicit installer and administrator approval.",
             )
             .size(10.5)
             .color(theme::muted()),

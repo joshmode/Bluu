@@ -214,7 +214,8 @@ The user explicitly accepts an advanced, less-safe path. Bluu still:
 - shows provider identity and elevation requirements;
 - offers dry-run/apply/rollback;
 - preserves provider state and logs;
-- does not bundle aptX, LDAC, or other proprietary codec binaries.
+- does not bundle proprietary Qualcomm/Sony codec binaries; the optional native
+  provider builds from GPL/LGPL/Apache source and requires separate review.
 
 The provider itself is responsible for codec licensing, stack compatibility,
 driver signing, and hardware support. A provider that cannot produce actual audio

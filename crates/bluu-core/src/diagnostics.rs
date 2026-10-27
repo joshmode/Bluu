@@ -198,7 +198,7 @@ fn codec_report(
             ),
             vec![
                 "Requires a vendor stack, replacement A2DP driver, or external audio path.".into(),
-                "No registry toggle is used by Bluu.".into(),
+                "No codec-registration registry toggle is used by Bluu; the separate AAC/aptX preference cannot add this codec.".into(),
             ],
         )
     };

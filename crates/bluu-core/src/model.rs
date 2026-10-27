@@ -330,6 +330,8 @@ pub struct Snapshot {
     pub providers: Vec<crate::provider::ProviderRecord>,
     #[serde(default)]
     pub provider_preferences: Vec<crate::provider::ProviderPreference>,
+    #[serde(default)]
+    pub inbox_codec: InboxCodecToggle,
 }
 
 impl Snapshot {
@@ -347,6 +349,7 @@ impl Snapshot {
             platform: None,
             providers: Vec::new(),
             provider_preferences: Vec::new(),
+            inbox_codec: InboxCodecToggle::default(),
         }
     }
 
@@ -432,4 +435,22 @@ pub struct ProviderOperationOutcome {
     pub rollback_token: Option<String>,
     pub observation: Option<ActiveCodecObservation>,
     pub applied_preference: Option<crate::provider::ProviderPreference>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct InboxCodecToggle {
+    pub supported: bool,
+    pub aac_enabled: Option<bool>,
+    pub registry_path: String,
+    pub note: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct InboxCodecChange {
+    pub previous: Option<bool>,
+    #[serde(default)]
+    pub aac_enabled: Option<bool>,
+    pub applied: bool,
+    pub requires_reconnect: bool,
+    pub message: String,
 }

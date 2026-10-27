@@ -1,8 +1,9 @@
-//! Windows implementation. All inventory calls are read-only and least-privilege.
+//! Windows implementation. Inventory calls are read-only and least-privilege.
 //!
 //! Key boundaries:
 //! - WinRT device enumeration and cached SDP records are documented interfaces.
-//! - Windows exposes no documented A2DP codec-capability or preference API.
+//! - Windows exposes no documented A2DP codec-registration API. One narrow,
+//!   build-sensitive BthA2dp AAC preference is available through explicit consent.
 //! - The negotiated codec is observed through an *undocumented event payload* from a
 //!   documented ETW provider. That observation requires an elevated trace session;
 //!   therefore the UI process stays unelevated and launches a tiny helper.
@@ -11,6 +12,7 @@
 
 mod audio;
 mod bluetooth;
+pub mod codec_toggle;
 mod helper;
 mod system;
 
@@ -68,6 +70,7 @@ impl AudioBackend for WindowsBackend {
             configure_preferred_codec: true,
             configure_codec_parameters: true,
             configure_endpoint_format: false,
+            configure_inbox_codec_toggle: true,
             supported_operations: vec![
                 ConfigOperation::SetPreferredCodec,
                 ConfigOperation::SetCodecPriority,
@@ -83,6 +86,13 @@ impl AudioBackend for WindowsBackend {
         bluetooth::scan(&mut snapshot)?;
         snapshot.providers = crate::providers::discover();
         snapshot.provider_preferences = crate::providers::load_preferences();
+        snapshot.inbox_codec =
+            codec_toggle::read_toggle().unwrap_or_else(|e| bluu_core::model::InboxCodecToggle {
+                supported: false,
+                aac_enabled: None,
+                registry_path: format!(r"HKLM\{}", codec_toggle::parameters_path()),
+                note: e.to_string(),
+            });
         if self.captured_codec.is_none() {
             self.captured_codec = crate::providers::load_observation();
         }
@@ -121,5 +131,23 @@ impl AudioBackend for WindowsBackend {
         request: &ProviderOperationRequest,
     ) -> Result<ProviderOperationOutcome, BackendError> {
         crate::providers::operation(request, self.last_snapshot.as_ref())
+    }
+
+    fn set_inbox_codec_toggle(
+        &mut self,
+        aac_enabled: bool,
+        dry_run: bool,
+    ) -> Result<bluu_core::model::InboxCodecChange, BackendError> {
+        helper::set_inbox_codec(aac_enabled, dry_run)
+    }
+
+    fn restore_inbox_codec_toggle(
+        &mut self,
+    ) -> Result<bluu_core::model::InboxCodecChange, BackendError> {
+        helper::restore_inbox_codec()
+    }
+
+    fn inbox_codec_toggle(&mut self) -> Result<bluu_core::model::InboxCodecToggle, BackendError> {
+        codec_toggle::read_toggle()
     }
 }

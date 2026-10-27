@@ -97,8 +97,8 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
             needs_codec_implementation: "No for the Windows in-box path.".into(),
             needs_stack_or_driver: "No for supported in-box configurations.".into(),
             remote_must_advertise: "Yes; Qualcomm licensing applies to the remote implementation.".into(),
-            licensing: "aptX is a Qualcomm brand/technology with licensing requirements. This project does not bundle it.".into(),
-            open_implementations: "libopenaptx (GPLv3+) exists but is an encoder/decoder, not a Windows A2DP stack extension.".into(),
+            licensing: "aptX is a Qualcomm brand/technology with licensing requirements. Only a separately built LGPL codec core is vendored for the optional native provider.".into(),
+            open_implementations: "FFmpeg's LGPL aptX core provides encoding; the optional native provider supplies the A2DP transport.".into(),
             parameters_observable: "Codec ID can be observed; sample-rate bits may be inferred from a protocol trace, not a stable public API.".into(),
             evidence: Evidence::Documented,
             limitations: vec![
@@ -117,7 +117,7 @@ pub fn feasibility_matrix() -> Vec<FeasibilityRow> {
             needs_stack_or_driver: "Yes: replacement A2DP driver/stack or vendor integration.".into(),
             remote_must_advertise: "Yes.".into(),
             licensing: "Qualcomm licensing plus driver signing and redistribution obligations.".into(),
-            open_implementations: "libopenaptx provides codec coding, not the A2DP/Windows integration.".into(),
+            open_implementations: "FFmpeg's LGPL aptX HD core provides coding; the optional native provider supplies the A2DP transport.".into(),
             parameters_observable: "Only through custom trace instrumentation or the replacement stack.".into(),
             evidence: Evidence::Documented,
             limitations: vec![

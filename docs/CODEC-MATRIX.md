@@ -47,11 +47,15 @@ headsets we have tested. The machine-readable source is
 
 ## “Enabling” reality
 
-- Registry edits are **not** a supported registration mechanism and are not used.
+- The only supported registry value is the narrow, documented-in-Blue-UI
+  `BthA2dp\Parameters\BluetoothAacEnable` AAC preference. It is backed up,
+  explicitly consented, and cannot register additional codecs.
 - Advanced preference/registration is supported through the provider API. The
-  provider owns the encoder/A2DP transport; Bluu validates and invokes it.
+  optional in-repo native provider owns its encoder/A2DP transport; Bluu validates
+  and invokes it.
 - A codec decoder or encoder library does not create an A2DP encoder path.
 - An external dongle/vendor stack is a legitimate way to get advanced codecs, but it
   is outside the in-box Bluetooth stack.
 - Replacing the A2DP driver is a specialist, kernel-mode, signing-heavy product
-  decision. It is not included in Bluu v0.1.0.
+  decision. Bluu includes an optional experimental implementation for inspection and
+  testing; it is not a production-signed or hardware-validated guarantee.

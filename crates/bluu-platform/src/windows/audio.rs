@@ -179,6 +179,10 @@ fn read_endpoint(
                     }
                     let head = std::slice::from_raw_parts(p as *const u8, 18);
                     let extra = u16::from_le_bytes([head[16], head[17]]) as usize;
+                    if extra > 4096 {
+                        CoTaskMemFree(Some(p as *const c_void));
+                        return None;
+                    }
                     let all = std::slice::from_raw_parts(p as *const u8, 18 + extra).to_vec();
                     CoTaskMemFree(Some(p as *const c_void));
                     parse_wave_format(&all)

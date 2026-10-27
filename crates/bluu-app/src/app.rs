@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use bluu_core::{
     codec::{CodecId, CodecReport},
     diagnostics::{self, DiagnosticFinding},
-    model::{CaptureRequest, ProviderOperationRequest, Snapshot},
+    model::{CaptureRequest, InboxCodecChange, ProviderOperationRequest, Snapshot},
     privacy::DiagnosticExport,
     provider::{ProviderAction, ProviderPreference},
     settings::{Settings, ThemePreference},
@@ -41,6 +41,9 @@ pub struct BluuApp {
     pub provider_note: Option<(bool, String)>,
     pub provider_busy: bool,
     pub provider_consented: bool,
+    pub inbox_codec_busy: bool,
+    pub inbox_codec_consented: bool,
+    pub inbox_codec_note: Option<(bool, String)>,
 }
 
 impl BluuApp {
@@ -77,6 +80,9 @@ impl BluuApp {
             provider_note: None,
             provider_busy: false,
             provider_consented: false,
+            inbox_codec_busy: false,
+            inbox_codec_consented: false,
+            inbox_codec_note: None,
         }
     }
 
@@ -284,6 +290,83 @@ impl BluuApp {
 
     pub fn provider_rollback(&mut self) {
         self.provider_operation(ProviderAction::Rollback);
+    }
+
+    pub fn supports_inbox_toggle(&self) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.inbox_codec.supported)
+    }
+
+    pub fn inbox_codec_change(&mut self, aac_enabled: bool, dry_run: bool) {
+        if self.inbox_codec_busy {
+            return;
+        }
+        if !self.supports_inbox_toggle() {
+            self.inbox_codec_note = Some((
+                false,
+                "This Windows build/driver does not expose the BthA2dp AAC preference.".into(),
+            ));
+            return;
+        }
+        if !dry_run && !self.inbox_codec_consented {
+            self.inbox_codec_note = Some((
+                false,
+                "Acknowledge the whole-PC, undocumented-setting warning before applying.".into(),
+            ));
+            return;
+        }
+        self.inbox_codec_busy = true;
+        self.inbox_codec_note = Some((
+            false,
+            if dry_run {
+                "Checking the current BthA2dp preference (no write)…"
+            } else {
+                "Windows will ask for administrator approval for the BthA2dp preference change…"
+            }
+            .into(),
+        ));
+        self.worker.set_inbox_codec(aac_enabled, dry_run);
+    }
+
+    pub fn restore_inbox_codec(&mut self) {
+        if self.inbox_codec_busy {
+            return;
+        }
+        if !self.inbox_codec_consented {
+            self.inbox_codec_note = Some((
+                false,
+                "Acknowledge the warning before restoring the saved BthA2dp preference.".into(),
+            ));
+            return;
+        }
+        self.inbox_codec_busy = true;
+        self.inbox_codec_note = Some((
+            false,
+            "Windows will ask for administrator approval to restore the preference…".into(),
+        ));
+        self.worker.restore_inbox_codec();
+    }
+
+    fn apply_inbox_change(
+        &mut self,
+        result: Result<InboxCodecChange, bluu_core::backend::BackendError>,
+    ) {
+        self.inbox_codec_busy = false;
+        match result {
+            Ok(change) => {
+                self.inbox_codec_note = Some((change.applied, change.message.clone()));
+                if change.applied {
+                    if let Some(snapshot) = &mut self.snapshot {
+                        snapshot.inbox_codec.aac_enabled = change.aac_enabled;
+                    }
+                    self.scan();
+                }
+            }
+            Err(error) => {
+                self.inbox_codec_note = Some((false, format!("{error}\n{}", error.actionable())));
+            }
+        }
     }
 
     pub fn current_device(&self) -> Option<&bluu_core::BluetoothAudioDevice> {
@@ -501,6 +584,9 @@ impl BluuApp {
                             self.provider_note = Some((false, format!("{e}\n{}", e.actionable())));
                         }
                     }
+                }
+                WorkerEvent::InboxCodecChanged(result) => {
+                    self.apply_inbox_change(result);
                 }
             }
         }
@@ -817,9 +903,8 @@ impl BluuApp {
                 ui.heading("Bluu");
                 ui.label(
                     RichText::new(format!(
-                        "Version {} · {}-licensed open source",
-                        bluu_core::VERSION,
-                        "MIT OR Apache-2.0"
+                        "Version {} · GPL-3.0-or-later open source",
+                        bluu_core::VERSION
                     ))
                     .color(theme::muted()),
                 );
@@ -834,7 +919,7 @@ impl BluuApp {
                         .color(theme::warn()),
                 );
                 ui.label(
-                    "It does not silently install drivers, edit the registry, disable Secure Boot or driver signature enforcement, or replace the Bluetooth stack. Advanced codecs require a separately installed provider that owns the encoder, transport, driver signing, and licensing. Bluu validates and controls that provider; it does not bundle proprietary codecs.",
+                    "It does not silently install drivers, disable Secure Boot or driver signature enforcement, or replace the Bluetooth stack. An explicitly enabled native provider can install a separate experimental A2DP driver/service. The AAC/aptX toggle is an undocumented BthA2dp service value written only after consent, with a saved prior value and a restore action. Advanced codec control is never treated as proof that a codec is active.",
                 );
                 ui.add_space(8.0);
                 ui.label(

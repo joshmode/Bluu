@@ -12,17 +12,24 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo check --workspace --target x86_64-pc-windows-msvc
 cargo run -p bluu-platform --bin screenshots
+cmake -S native/owb -B build/native-host
+cmake --build build/native-host --target owb_driver_tests
+build/native-host/tests/driver/owb_driver_tests
 ```
 
 Results:
 
-- Core tests: 27 passed (codec IDs, provider contracts, evidence rules, SDP
+- Core tests: 29 passed (codec IDs, provider contracts, evidence rules, SDP
   bounds/fixtures, feasibility, privacy redaction, settings, verification).
-- Platform tests: 5 passed (screenshot invariants, helper argument/path validation,
+- Platform tests: 7 passed (screenshot invariants, helper argument/path validation,
   provider discovery/traversal rejection).
 - Provider integration tests: 4 passed (apply/verify/rollback round-trip,
   missing-executable rejection, malformed-executable failure, contained
   install/uninstall).
+- Native AVDTP host tests: 28 passed (SEP discovery, codec capability matching,
+  SET_CONFIGURATION bytes, LDAC frequency codes, per-codec RTP/payload framing).
+- Native aptX core: compiled and executed on the host with an independent
+  block-level smoke harness (not a substitute for Windows service tests).
 - Platform screenshot test: passed.
 - Windows target: type-checked successfully (not linked or executed; MSVC runtime and
   Windows host are required for a real build).

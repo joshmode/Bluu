@@ -22,9 +22,14 @@ without pretending Windows offers controls it does not.
 
 ## What it deliberately does not do
 
-- It does **not** silently install drivers, edit the registry, disable Secure Boot,
-  or replace the Bluetooth stack. Advanced providers are explicitly installed and
-  may control a vendor/replacement driver under their publisher’s signed package.
+- It does **not** silently install drivers or replace the Bluetooth stack without
+  explicit consent. The optional Bluu native A2DP provider is a separate experimental
+  component with its own installer, signing, test-signing, and rollback procedure.
+- It does **not** disable Secure Boot or driver signature enforcement. A test-signed
+  driver is not presented as production-ready.
+- It only writes the build-sensitive `BthA2dp\Parameters\BluetoothAacEnable` value
+  through a separate elevated helper after an explicit warning, a dry-run check when
+  requested, backup of the prior value, and a documented restore path.
 - It does **not** claim that a codec library adds Windows A2DP support.
 - It does **not** show a codec as active because it is selected in the UI.
 - It does **not** universally unlock LDAC, aptX HD, or aptX Adaptive.
@@ -41,9 +46,9 @@ a replacement driver — not a registry tweak. See [research](docs/RESEARCH.md) 
 | SBC | Yes | No supported API |
 | AAC | Yes (21H2+) | No supported API |
 | aptX Classic | Yes | No supported API |
-| aptX HD | No | Provider-gated |
+| aptX HD | No | Native experimental provider / provider-gated |
 | aptX Adaptive | Select Qualcomm 24H2 devices | Provider-gated / OEM |
-| LDAC | No | Provider-gated |
+| LDAC | No | Native experimental provider / provider-gated |
 | LC3 / LE Audio | Separate vendor LE Audio path | Not an A2DP provider codec |
 
 Bluu shows what it can observe and explains the rest.
@@ -56,9 +61,11 @@ Bluu shows what it can observe and explains the rest.
 4. Pair/connect the headset in Windows Settings.
 5. Use **Verify live codec** only when you want to approve a one-time elevation
    prompt for the ETW helper. Advanced codec control requires an explicitly
-   installed provider; see [provider API](docs/PROVIDER-API.md).
+   installed provider; see [provider API](docs/PROVIDER-API.md) and the
+   [native component limitations](docs/NATIVE-A2DP.md).
 
-No installer service, driver, or startup task is created by the portable build.
+The portable build does not install a driver or service. Installing the optional
+native A2DP driver/service is a separate, explicit, administrator-approved action.
 
 ## Build from source
 
@@ -109,6 +116,8 @@ crates/bluu-platform   Windows + demo backends, screenshot fixture renderer
 crates/bluu-app        egui desktop application
 crates/bluu-etw-helper short-lived elevated ETW observer
 crates/bluu-provider-demo simulated provider protocol fixture
+crates/bluu-provider-owb adapter for the optional native A2DP provider
+native/owb             GPLv3 experimental A2DP driver/service and codec components
 ```
 
 See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and
@@ -118,7 +127,8 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and
 
 On the development host (macOS, no Windows radio):
 
-- 33 core/provider/app tests and 5 platform tests pass;
+- 36 core/provider/app tests and 7 platform tests pass;
+- 28 native AVDTP host tests pass;
 - formatting and Clippy with `-D warnings` pass;
 - the Windows target type-checks;
 - the demo UI/screenshot renderer builds;
@@ -143,5 +153,6 @@ usernames, computer name, and paths by default. See [privacy](docs/PRIVACY.md).
 
 ## Licence
 
-MIT OR Apache-2.0. See [LICENSING.md](docs/LICENSING.md). Product names and
+GPL-3.0-or-later, with the vendored third-party components retaining their
+respective licences. See [LICENSING.md](docs/LICENSING.md). Product names and
 trademarks belong to their respective owners.
