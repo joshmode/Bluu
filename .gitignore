@@ -1,0 +1,14 @@
+/target
+/.tooling
+/dist
+*.zip
+*.msi
+/.idea
+/.vscode
+*.log
+*.etl
+*.png
+!/docs/images/*.png
+/dist
+/.DS_Store
+

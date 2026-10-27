@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bluu-core",
+    "crates/bluu-platform",
+    "crates/bluu-app",
+    "crates/bluu-etw-helper",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/joshmode/Bluu"
+homepage = "https://github.com/joshmode/Bluu"
+
+[workspace.dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde"] }
+directories = "6.0.0"
+eframe = { version = "0.31.1", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+ferrisetw = "1.2.0"
+image = { version = "0.25.8", default-features = false, features = ["png"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+codegen-units = 4
+

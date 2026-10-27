@@ -1,0 +1,22 @@
+[package]
+name = "bluu-etw-helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bluu-core = { path = "../bluu-core" }
+bluu-platform = { path = "../bluu-platform" }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+ferrisetw.workspace = true
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+] }
+

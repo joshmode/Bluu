@@ -1,0 +1,31 @@
+[package]
+name = "bluu-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "bluu"
+path = "src/main.rs"
+
+[dependencies]
+bluu-core = { path = "../bluu-core" }
+bluu-platform = { path = "../bluu-platform" }
+chrono.workspace = true
+directories.workspace = true
+eframe.workspace = true
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
